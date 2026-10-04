@@ -331,6 +331,7 @@
         d.x += l._dx * speed * dt;
         d.y += l._dy * speed * dt;
         if (d.y > H) { d.y -= H + len; d.x = Math.random() * W; }
+        else if (d.y < -len) { d.y += H + len; d.x = Math.random() * W; }   // upward particles (embers) wrap too
         if (d.x < 0) d.x += W; else if (d.x > W) d.x -= W;
         for (let i = 0; i < len; i++) {
           ctx.fillRect(Math.round(d.x - l._dx * i), Math.round(d.y - l._dy * i), 1, 1);
