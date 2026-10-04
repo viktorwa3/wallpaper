@@ -28,7 +28,7 @@ for ($i = 0; $i -lt $images.Count; $i++) {
     $g.DrawString([IO.Path]::GetFileNameWithoutExtension($Files[$i]), $font, [System.Drawing.Brushes]::White, $x + 2, $y + 1)
 }
 
-$sheet.Save((Join-Path (Get-Location) $Out), [System.Drawing.Imaging.ImageFormat]::Png)
+$sheet.Save([IO.Path]::GetFullPath([IO.Path]::Combine((Get-Location).Path, $Out)), [System.Drawing.Imaging.ImageFormat]::Png)
 $images | ForEach-Object { $_.Dispose() }
 $g.Dispose(); $sheet.Dispose()
 Write-Host $Out
