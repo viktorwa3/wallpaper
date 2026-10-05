@@ -15,10 +15,17 @@ $dist = Join-Path $root "dist\$Name"
 if (Test-Path $dist) { Remove-Item -Recurse -Force $dist }
 New-Item -ItemType Directory -Force $dist | Out-Null
 
-# Engine and shared assets (shared drafts are not shipped).
-New-Item -ItemType Directory -Force "$dist\engine", "$dist\shared\assets" | Out-Null
+# Engine and shared art, keeping shared/'s folder structure. drafts/, refs/ and frames/ are not shipped, so scene
+# variants that point into shared drafts (e.g. ?head=224) only work from the repo, not from the bundle.
+New-Item -ItemType Directory -Force "$dist\engine" | Out-Null
 Copy-Item "$root\engine\engine.js", "$root\engine\style.css" "$dist\engine"
-Copy-Item "$root\shared\assets\*.png" "$dist\shared\assets"
+Get-ChildItem -Recurse -File "$root\shared" -Filter *.png |
+    Where-Object { $_.FullName.Substring($root.Length) -notmatch '\\(drafts|refs|frames)\\' } |
+    ForEach-Object {
+        $to = Join-Path $dist $_.FullName.Substring($root.Length + 1)
+        New-Item -ItemType Directory -Force (Split-Path $to) | Out-Null
+        Copy-Item $_.FullName $to
+    }
 
 # The wallpaper's own assets, without raw animation frames (sheets are built from them).
 Copy-Item -Recurse "$src\assets" "$dist\assets"

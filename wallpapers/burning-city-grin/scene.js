@@ -3,18 +3,22 @@
 // on the foreground platform two battered heroes face a four-armed demon.
 //
 // Variants for comparing (URL params):
-//   ?head=168 | 224 | 264 | pro256 | 320   which head sprite (default 320 = assets/head.png)
+//   ?head=168 | 224 | 264 | pro256 | 320   which head sprite (default 320 = shared/characters/grin/head.png)
 //   ?lift=N                                how far the eyes sit above the bottom of the black sky band (default 40)
 //   ?alpha=0..1                            head opacity (default 0.2)
 //   ?bob=N                                 head sway amplitude in px (default 2, 0 = still)
 (() => {
+  // Shared art (shared/): the grin character, the demon, the distant smoke and the ruined-city background.
+  const SH = '../../shared/';
+  const GRIN = SH + 'characters/grin/', DEMON = SH + 'characters/demon/', SMOKE = SH + 'effects/smoke/', CITY = SH + 'backgrounds/ruined-city/';
+
   // Sprite geometry measured from the PNGs: opaque bbox [x0, x1, y0, y1], eye centres and eye rows, in sprite px.
   const HEADS = {
-    168:    { src: 'assets/drafts/head3_c3eyes_pixen_seed7302.png',  bbox: [45, 122, 4, 100], eyes: [[70, 51], [97, 51]], eyeRows: [47, 56] },
-    224:    { src: 'assets/drafts/head4_pixen_224x140_seed7401.png', bbox: [60, 163, 5, 134], eyes: [[93, 69], [130, 69]], eyeRows: [63, 75] },
-    264:    { src: 'assets/drafts/head4_pixen_264x164_seed7402.png', bbox: [71, 192, 6, 158], eyes: [[110, 82], [153, 81]], eyeRows: [74, 89] },
-    pro256: { src: 'assets/drafts/head4_pro_256x160_seed7404.png',   bbox: [54, 201, 0, 159], eyes: [[101, 78], [154, 78]], eyeRows: [69, 87] },
-    320:    { src: 'assets/head.png',                                bbox: [86, 233, 8, 193], eyes: [[133, 99], [186, 99]], eyeRows: [90, 108] },
+    168:    { src: GRIN + 'drafts/head3_c3eyes_pixen_seed7302.png',  bbox: [45, 122, 4, 100], eyes: [[70, 51], [97, 51]], eyeRows: [47, 56] },
+    224:    { src: GRIN + 'drafts/head4_pixen_224x140_seed7401.png', bbox: [60, 163, 5, 134], eyes: [[93, 69], [130, 69]], eyeRows: [63, 75] },
+    264:    { src: GRIN + 'drafts/head4_pixen_264x164_seed7402.png', bbox: [71, 192, 6, 158], eyes: [[110, 82], [153, 81]], eyeRows: [74, 89] },
+    pro256: { src: GRIN + 'drafts/head4_pro_256x160_seed7404.png',   bbox: [54, 201, 0, 159], eyes: [[101, 78], [154, 78]], eyeRows: [69, 87] },
+    320:    { src: GRIN + 'head.png',                              bbox: [86, 233, 8, 193], eyes: [[133, 99], [186, 99]], eyeRows: [90, 108] },
   };
   const params = new URLSearchParams(location.search);
   const head = HEADS[params.get('head')] ?? HEADS[320];
@@ -35,7 +39,7 @@
   // Distant smoke: PixMiniMax animation of a pixen still, last frame pinned to the first; h crops its rubble base.
   // Fire was tried (sprites, procedural `flames`) and dropped on 2026-10-03 — see CLAUDE.md.
   const D = 'assets/drafts/';
-  const farSmoke = { type: 'sprite', src: D + 'smoke_pixmm_64x128x16_seed8601.png', frameW: 64, frames: 16, fps: 6, h: 116,
+  const farSmoke = { type: 'sprite', src: SMOKE + 'smoke_pixmm_64x128x16_seed8601.png', frameW: 64, frames: 16, fps: 6, h: 116,
     edgeFade: { top: 24, bottom: 34, left: 8, right: 16, smooth: true } };
 
   // Fighters: PixelLab v3 characters (3/4 view) with PixMiniMax breathing loops, last frame pinned to the first.
@@ -45,7 +49,7 @@
   const mage = { type: 'sprite', src: D + 'mage_breath_48x8.png', frameW: 48, frames: 8, fps: 6, feet: 46, feetX: 23, feetW: 12 };
   // Demon: wide 3/4 stance, the rear foot ends ~5 px higher than the front one, so its shadow is taller and sits
   // between the two soles (shadowDy / shadowRy), or the rear foot floats above it.
-  const demon = { type: 'sprite', src: D + 'demon_breath_64x7.png', frameW: 64, frames: 7, fps: 5, feet: 62, feetX: 31, feetW: 18,
+  const demon = { type: 'sprite', src: DEMON + 'demon_breath_64x7.png', frameW: 64, frames: 7, fps: 5, feet: 62, feetX: 31, feetW: 18,
     shadowDy: -3, shadowRy: 3,
     eyes: [[26, 16, 7, 1], [22, 16, 4, 0.55]] };   // [x, y, glow radius, alpha] in sprite px; the far eye is hidden by the profile
   const stand = (c, x, ground) => ({ ...c, x, y: ground - c.feet });
@@ -57,7 +61,7 @@
     canvas: { width: 512, height: 288 },
     maxFps: 30,
     layers: [
-      { id: 'bg', type: 'image', src: '../../shared/assets/bg.png', x: 0, y: 0, z: 0 },
+      { id: 'bg', type: 'image', src: CITY + 'bg.png', x: 0, y: 0, z: 0 },
 
       // Orange underglow from the burning city, procedural.
       { id: 'glow', type: 'gradient', y0: 40, y1: 250, peak: 0.6, color: '#ff6a1f', alpha: 0.35, flicker: 0.35, hz: 0.7, blend: 'lighter', z: 5 },
@@ -73,7 +77,7 @@
       { id: 'far1', ...farSmoke, x: 84, y: 176 - 116, alpha: 0.3, phase: 0, z: 2 },
       { id: 'far2', ...farSmoke, x: 318, y: 176 - 116, alpha: 0.35, phase: 10, z: 2 },
       { id: 'far3', ...farSmoke, x: 428, y: 172 - 116, alpha: 0.25, phase: 5, flipX: true, z: 2 },
-      { id: 'fg', type: 'image', src: '../../shared/assets/bg_fg.png', x: 0, y: 0, z: 3 },
+      { id: 'fg', type: 'image', src: CITY + 'bg_fg.png', x: 0, y: 0, z: 3 },
 
       // Fighters on the platform, above the sky underglow; the mage stands a step behind the swordsman.
       shadow('mageShadow', mage, 104, 252),
