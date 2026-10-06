@@ -2,7 +2,9 @@
 // scaled to the screen by the largest integer factor (letterboxed if needed).
 //
 // Layer types (drawn in ascending z):
-//   image       { src, x, y, fade, edgeFade }                         fade: [y0, y1] canvas rows — image is gone above y0 and fully
+//   image       { src, x, y, fade, edgeFade, rim, grade }  rim: { color, alpha, sides } = 1px backlight outline (see
+//               buildRim); grade: [{ blend, alpha, color, from, to }] = colour grade / scene light passes (see buildGrade).
+//               fade: [y0, y1] canvas rows — image is gone above y0 and fully
 //               visible below y1, ordered-dithered in between (sinks into the dark sky). Mask applied once at load.
 //   sprite      { src, x, y, frameW, frames, fps, phase, h, flipX } frames laid out in one row; phase = frame offset
 //               (desyncs copies); h = draw only the top h rows (crops a baked-in base); flipX mirrors horizontally.
@@ -29,6 +31,15 @@
 //               Never loops, any shape; combine with `mask` to keep it in an opening.
 //   shadow      { x, y, rx, ry, color }                     flat pixel ellipse centred on x,y (contact shadow under feet);
 //               built from whole-pixel rows, so it stays crisp. Use alpha for strength.
+//   slash       { from, ctrl, to, streaks, gap, width, period, draw, hold, fade, delay, colors }
+//               claw trail: `streaks` parallel quadratic arcs (canvas points from → ctrl → to, offset `gap` px apart
+//               along the normal), drawn in whole pixels. Each cycle of `period` s: the arcs are swept in over
+//               `draw` s, stay `hold` s, burn out over `fade` s (tail first). colors = [core, mid, edge] (white-hot
+//               → red); width = core thickness in px at the middle of the arc, tapering to 1 at the ends.
+//   claws       { x, y, angle, len, count, gap, curve, colors }  static claw wounds: `count` parallel gashes starting
+//               around x,y, running at `angle` degrees (0 = right, 90 = down) for ~len px, `gap` px apart, bowed by
+//               `curve` px. Each gash = bright red line + dark red lip below + short pale highlight above, 1px tips.
+//               colors = [dark, red, highlight]. Put it on the victim's z so it reads as part of the body.
 //   particles   { count, color, speed, angle, length }      procedural rain
 // Common: id, z, alpha (0..1), blend (canvas globalCompositeOperation, e.g. "lighter"),
 //         bob: { amp, period, phase } — slow vertical sway in whole pixels (layers with the same bob move together);
@@ -252,10 +263,72 @@
     l._faded = c;
   }
 
+  // Colour grade / scene light for image layers: `grade` = list of passes, each clipped to the sprite's silhouette and
+  // composited onto it with `blend` (any canvas blend mode: multiply darkens/warms, screen adds light, ...) at `alpha`.
+  // A pass is a flat `color`, or a linear gradient from `color` at `from` to transparent at `to` (both [fx, fy] as
+  // fractions of the sprite box, e.g. from [0, 1] = bottom-left) — e.g. firelight from below. Built once at load,
+  // compositing only (no getImageData: it throws on file:// pages).
+  function buildGrade(l) {
+    const src = l._faded ?? l._img, w = src.width, h = src.height;
+    const out = document.createElement('canvas');
+    out.width = w; out.height = h;
+    const ox = out.getContext('2d');
+    ox.drawImage(src, 0, 0);
+    for (const p of l.grade) {
+      const pass = document.createElement('canvas');
+      pass.width = w; pass.height = h;
+      const px = pass.getContext('2d');
+      if (p.from) {
+        const g = px.createLinearGradient(p.from[0] * w, p.from[1] * h, p.to[0] * w, p.to[1] * h);
+        g.addColorStop(0, p.color);
+        g.addColorStop(1, 'transparent');
+        px.fillStyle = g;
+      } else px.fillStyle = p.color;
+      px.fillRect(0, 0, w, h);
+      px.globalCompositeOperation = 'destination-in';
+      px.drawImage(src, 0, 0);
+      ox.globalCompositeOperation = p.blend ?? 'source-over';
+      ox.globalAlpha = p.alpha ?? 1;
+      ox.drawImage(pass, 0, 0);
+    }
+    l._faded = out;
+  }
+
+  // Rim light for image layers: a 1px silhouette ring in `rim.color` around the opaque pixels, drawn under the
+  // image, so dark figures separate from a dark background (fire backlight). Optional rim.sides limits it to some
+  // directions, e.g. ['left', 'top'] for light coming from the upper left. Built once at load.
+  // Compositing only — no getImageData, which throws on file:// pages (images count as cross-origin there).
+  function buildRim(l) {
+    // Built from the original image, not the faded one: a dithered edgeFade would get a rim around every dot.
+    const src = l._img, w = src.width, h = src.height;
+    const sil = document.createElement('canvas');           // the sprite's silhouette in the rim colour
+    sil.width = w; sil.height = h;
+    const sx = sil.getContext('2d');
+    sx.drawImage(src, 0, 0);
+    sx.globalCompositeOperation = 'source-in';
+    sx.fillStyle = l.rim.color ?? '#ff5a2a';
+    sx.fillRect(0, 0, w, h);
+    const out = document.createElement('canvas');           // 1px larger on every side, origin at (-1, -1)
+    out.width = w + 2; out.height = h + 2;
+    const ox = out.getContext('2d');
+    const shift = { left: [0, 1], right: [2, 1], top: [1, 0], bottom: [1, 2] };   // silhouette pushed toward that side
+    for (const s of l.rim.sides ?? ['left', 'right', 'top', 'bottom']) ox.drawImage(sil, ...shift[s]);
+    ox.globalCompositeOperation = 'destination-out';        // keep only the ring outside the sprite
+    ox.drawImage(src, 1, 1);
+    l._rim = out;
+  }
+
   const draw = {
     image(l) {
-      if (l._img) ctx.drawImage(l._faded ?? l._img, Math.round(l.x ?? 0), Math.round(l.y ?? 0));
-      else drawRect(l, '#f0f', l.id);
+      if (!l._img) return drawRect(l, '#f0f', l.id);
+      const x = Math.round(l.x ?? 0), y = Math.round(l.y ?? 0);
+      if (l._rim) {
+        ctx.save();
+        ctx.globalAlpha *= l.rim.alpha ?? 1;
+        ctx.drawImage(l._rim, x - 1, y - 1);
+        ctx.restore();
+      }
+      ctx.drawImage(l._faded ?? l._img, x, y);
     },
     sprite(l, t) {
       if (!l._img) return drawRect(l, '#f0f', l.id);
@@ -324,6 +397,55 @@
         ctx.fillRect(cx - half, cy + dy, half * 2 + 1, 1);
       }
     },
+    slash(l, t) {
+      const period = l.period ?? 2.5, dIn = l.draw ?? 0.12, hold = l.hold ?? 0.25, fade = l.fade ?? 0.45;
+      const ct = ((t - (l.delay ?? 0)) % period + period) % period;
+      if (ct > dIn + hold + fade) return;
+      const head = Math.min(1, ct / dIn);                                    // how far along the arc is swept in
+      const tail = ct < dIn + hold ? 0 : (ct - dIn - hold) / fade;           // the tail burns away after the hold
+      const [x0, y0] = l.from, [cx, cy] = l.ctrl, [x1, y1] = l.to;
+      const [core, mid, edge] = l.colors ?? ['#fff4d6', '#ff5a2a', '#8f1418'];
+      const n = l.streaks ?? 3, gap = l.gap ?? 4, width = l.width ?? 2;
+      const len = Math.hypot(cx - x0, cy - y0) + Math.hypot(x1 - cx, y1 - cy);
+      const steps = Math.ceil(len * 2);
+      for (let s = 0; s < n; s++) {
+        const off = (s - (n - 1) / 2) * gap;
+        // Outer streaks are a little shorter, like claw tips raking at slightly different depths.
+        const trim = Math.abs(s - (n - 1) / 2) / n * 0.25;
+        for (let i = 0; i <= steps; i++) {
+          const u = i / steps;
+          if (u < tail + trim || u > head - trim * 0.5 || u > 1 - trim) continue;
+          const a = 1 - u, px = a * a * x0 + 2 * a * u * cx + u * u * x1, py = a * a * y0 + 2 * a * u * cy + u * u * y1;
+          const tx = 2 * a * (cx - x0) + 2 * u * (x1 - cx), ty = 2 * a * (cy - y0) + 2 * u * (y1 - cy);
+          const tl = Math.hypot(tx, ty) || 1, nx = -ty / tl, ny = tx / tl;
+          const taper = Math.sin(Math.PI * Math.min(1, Math.max(0, (u - tail) / Math.max(0.01, head - tail))));
+          const w = Math.max(1, Math.round(width * taper));
+          for (let k = -w; k <= w; k++) {
+            const c = Math.abs(k) < w * 0.5 ? core : Math.abs(k) < w ? mid : edge;
+            ctx.fillStyle = c;
+            ctx.fillRect(Math.round(px + nx * (off + k * 0.5)), Math.round(py + ny * (off + k * 0.5)), 1, 1);
+          }
+        }
+      }
+    },
+    claws(l) {
+      const [dark, red, hi] = l.colors ?? ['#4a0810', '#c41e24', '#ff9a86'];
+      const a = (l.angle ?? 60) * Math.PI / 180, dx = Math.cos(a), dy = Math.sin(a), nx = -dy, ny = dx;
+      const n = l.count ?? 3, gap = l.gap ?? 4, len = l.len ?? 18, curve = l.curve ?? 1.5, mid = (n - 1) / 2;
+      const px = (x, y, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); };
+      for (let i = 0; i < n; i++) {
+        const off = (i - mid) * gap, L = len * (1 - 0.18 * Math.abs(i - mid)), lead = Math.abs(i - mid) * 1.5;
+        const steps = Math.ceil(L * 2);
+        for (let s = 0; s <= steps; s++) {
+          const u = s / steps, bow = curve * Math.sin(Math.PI * u);
+          const x = l.x + dx * (lead + u * L) + nx * (off + bow), y = l.y + dy * (lead + u * L) + ny * (off + bow);
+          const body = u > 0.15 && u < 0.85;
+          if (body) px(x + nx, y + ny, dark);                  // lower lip of the cut
+          px(x, y, red);
+          if (u > 0.3 && u < 0.65) px(x - nx, y - ny, hi);     // torn-skin highlight on the upper edge
+        }
+      }
+    },
     particles(l, t, dt) {
       const len = l.length ?? 4, speed = l.speed ?? 180;
       ctx.fillStyle = l.color ?? '#7fa6c9';
@@ -345,6 +467,8 @@
     await Promise.all(layers.filter(l => l.src).map(async l => { l._img = await loadImage(l.src); }));
     await Promise.all(layers.filter(l => l.mask).map(async l => { l._mask = await loadImage(l.mask); }));
     layers.filter(l => l._img && (l.fade || l.edgeFade || l.tint)).forEach(fadeImage);
+    layers.filter(l => l._img && l.rim).forEach(buildRim);
+    layers.filter(l => l._img && l.grade).forEach(buildGrade);
     layers.filter(l => l.type === 'particles').forEach(initParticles);
     layers.filter(l => l.type === 'flames').forEach(initFlames);
 
