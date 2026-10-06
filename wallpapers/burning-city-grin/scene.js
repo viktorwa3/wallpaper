@@ -38,15 +38,14 @@
 
   // Distant smoke: PixMiniMax animation of a pixen still, last frame pinned to the first; h crops its rubble base.
   // Fire was tried (sprites, procedural `flames`) and dropped on 2026-10-03 — see CLAUDE.md.
-  const D = 'assets/drafts/';
   const farSmoke = { type: 'sprite', src: SMOKE + 'smoke_pixmm_64x128x16_seed8601.png', frameW: 64, frames: 16, fps: 6, h: 116,
     edgeFade: { top: 24, bottom: 34, left: 8, right: 16, smooth: true } };
 
   // Fighters: PixelLab v3 characters (3/4 view) with PixMiniMax breathing loops, last frame pinned to the first.
   // feet = lowest opaque row (`ground - feet` puts the soles on a canvas row), feetX / feetW = stance centre and
   // half-width for the contact shadow. Platform top edge ~y 230, walking surface below it.
-  const suit = { type: 'sprite', src: D + 'suit_breath_48x8.png', frameW: 48, frames: 8, fps: 6, feet: 47, feetX: 20, feetW: 12 };
-  const mage = { type: 'sprite', src: D + 'mage_breath_48x8.png', frameW: 48, frames: 8, fps: 6, feet: 46, feetX: 23, feetW: 12 };
+  const suit = { type: 'sprite', src: 'assets/suit_breath_48x8.png', frameW: 48, frames: 8, fps: 6, feet: 47, feetX: 20, feetW: 12 };
+  const mage = { type: 'sprite', src: 'assets/mage_breath_48x8.png', frameW: 48, frames: 8, fps: 6, feet: 46, feetX: 23, feetW: 12 };
   // Demon: wide 3/4 stance, the rear foot ends ~5 px higher than the front one, so its shadow is taller and sits
   // between the two soles (shadowDy / shadowRy), or the rear foot floats above it.
   const demon = { type: 'sprite', src: DEMON + 'demon_breath_64x7.png', frameW: 64, frames: 7, fps: 5, feet: 62, feetX: 31, feetW: 18,

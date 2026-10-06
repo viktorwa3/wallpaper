@@ -27,9 +27,10 @@ Get-ChildItem -Recurse -File "$root\shared" -Filter *.png |
         Copy-Item $_.FullName $to
     }
 
-# The wallpaper's own assets, without raw animation frames (sheets are built from them).
+# The wallpaper's own assets, without drafts/ (candidates — scenes reference only finals at assets/ top level) and raw
+# animation frames.
 Copy-Item -Recurse "$src\assets" "$dist\assets"
-Get-ChildItem -Recurse -Directory "$dist\assets" -Filter frames | Remove-Item -Recurse -Force
+Get-ChildItem -Recurse -Directory "$dist\assets" | Where-Object { $_.Name -in 'drafts', 'frames' } | Remove-Item -Recurse -Force
 
 # Page + scene with flattened paths. Explicit UTF-8 (no BOM) both ways: PowerShell 5 reads files as ANSI by default,
 # which mangled non-ASCII characters in scene.js and the bundled page rendered black.

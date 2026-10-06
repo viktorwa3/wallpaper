@@ -40,6 +40,15 @@
 //               around x,y, running at `angle` degrees (0 = right, 90 = down) for ~len px, `gap` px apart, bowed by
 //               `curve` px. Each gash = bright red line + dark red lip below + short pale highlight above, 1px tips.
 //               colors = [dark, red, highlight]. Put it on the victim's z so it reads as part of the body.
+//   burst       { x, y, period, delay, flashR, flashColor, sparks, speed, gravity, life, spread, angle, colors }
+//               clash impact repeating every `period` s: a quick radial flash (fades in ~0.18 s) + `sparks` sparks
+//               flung out around `angle` (deg, ±spread/2), falling under `gravity`, drawn as short whole-pixel streaks
+//               whose colour cools along `colors` (white-hot → red) over `life` s. Seeded per cycle, so it varies.
+//   debris      { area: [x, y, w, h], rate, kind: 'glass' | 'rock', vx: [min, max], vy: [min, max], gravity, size: [min, max],
+//               colors, glint, trail, trailColor }  pieces spawned in `area` at `rate`/s: glass = tumbling 2–3 px slivers
+//               that flash a `glint` pixel now and then, rock = small dark chunks; trail = motion streak length in px.
+//               Removed once off screen. An area just off one edge + fast vx = pieces flying across the whole frame.
+//   vignette    { color, alpha, inner }                     darkens the frame edges (radial, transparent inside `inner` 0..1).
 //   particles   { count, color, speed, angle, length }      procedural rain
 // Common: id, z, alpha (0..1), blend (canvas globalCompositeOperation, e.g. "lighter"),
 //         bob: { amp, period, phase } — slow vertical sway in whole pixels (layers with the same bob move together);
@@ -318,6 +327,23 @@
     l._rim = out;
   }
 
+  // debris simulation step: spawn at `rate`/s inside `area`, move under gravity, drop pieces that left the screen.
+  function stepDebris(l, dt) {
+    l._acc = (l._acc ?? 0) + dt * (l.rate ?? 3);
+    const [ax, ay, aw, ah] = l.area, rnd = (lo, hi) => lo + Math.random() * (hi - lo);
+    while (l._acc >= 1) {
+      l._acc -= 1;
+      const [s0, s1] = l.size ?? (l.kind === 'rock' ? [2, 4] : [2, 3]);
+      l._p.push({ x: rnd(ax, ax + aw), y: rnd(ay, ay + ah), vx: rnd(...(l.vx ?? [-20, 20])), vy: rnd(...(l.vy ?? [-10, 10])),
+        s: Math.round(rnd(s0, s1 + 0.99)), rot: Math.random() * 4, spin: rnd(4, 10) * (Math.random() < 0.5 ? -1 : 1),
+        c: Math.floor(Math.random() * (l.colors?.length ?? 1)) });
+    }
+    const grav = l.gravity ?? 60;
+    for (const p of l._p) { p.vy += grav * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.spin * dt; }
+    // Drop pieces only once they are off screen AND moving away, so ones spawned just outside an edge survive.
+    l._p = l._p.filter(p => p.y < H + 8 && !(p.x < -40 && p.vx <= 0) && !(p.x > W + 40 && p.vx >= 0));
+  }
+
   const draw = {
     image(l) {
       if (!l._img) return drawRect(l, '#f0f', l.id);
@@ -357,7 +383,10 @@
       ctx.fillRect(0, Math.min(l.y0, l.y1), W, Math.abs(l.y1 - l.y0));
     },
     glow(l, t) {
-      const pulse = l.flicker ? 1 - l.flicker * (0.5 + 0.5 * Math.sin(t * (l.hz ?? 1) * Math.PI * 2)) : 1;
+      // phase (s) desyncs several glows; jitter adds a fast irregular flicker on top of the slow pulse (fire).
+      const tt = t + (l.phase ?? 0);
+      let pulse = l.flicker ? 1 - l.flicker * (0.5 + 0.5 * Math.sin(tt * (l.hz ?? 1) * Math.PI * 2)) : 1;
+      if (l.jitter) pulse *= 1 - l.jitter * valueNoise(tt * 7, (l.x ?? 0) * 0.37);
       const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r);
       g.addColorStop(0, l.color);
       g.addColorStop(1, 'transparent');
@@ -445,6 +474,78 @@
           if (u > 0.3 && u < 0.65) px(x - nx, y - ny, hi);     // torn-skin highlight on the upper edge
         }
       }
+    },
+    burst(l, t) {
+      const period = l.period ?? 3, ct = ((t - (l.delay ?? 0)) % period + period) % period;
+      const cycle = Math.floor((t - (l.delay ?? 0)) / period), life = l.life ?? 0.7;
+      if (ct > Math.max(life, 0.2)) return;
+      const rand = (i) => hash(cycle * 13.1 + i * 7.7, i * 3.3 + 1.7);
+      // Flash: bright core shrinking fast.
+      const f = 1 - ct / 0.18;
+      if (f > 0) {
+        const r = (l.flashR ?? 14) * (0.6 + 0.4 * f);
+        const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, r);
+        g.addColorStop(0, l.flashColor ?? '#fff6d8');
+        g.addColorStop(0.35, '#ffb347');
+        g.addColorStop(1, 'transparent');
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha *= f;
+        ctx.fillStyle = g;
+        ctx.fillRect(l.x - r, l.y - r, r * 2, r * 2);
+        ctx.restore();
+      }
+      const colors = l.colors ?? ['#fffbe6', '#ffdd69', '#fe8e63', '#d23b36', '#77123d'];
+      const n = l.sparks ?? 16, base = (l.angle ?? 180) * Math.PI / 180, spread = (l.spread ?? 160) * Math.PI / 180;
+      const grav = l.gravity ?? 90;
+      for (let i = 0; i < n; i++) {
+        const lt = life * (0.5 + 0.5 * rand(i + 50));
+        if (ct > lt) continue;
+        const a = base + (rand(i) - 0.5) * spread, v = (l.speed ?? 70) * (0.4 + 0.8 * rand(i + 20));
+        const pos = (s) => [l.x + Math.cos(a) * v * s, l.y + Math.sin(a) * v * s + 0.5 * grav * s * s];
+        const [x1, y1] = pos(ct), [x0, y0] = pos(Math.max(0, ct - 0.03));
+        ctx.fillStyle = colors[Math.min(colors.length - 1, Math.floor(ct / lt * colors.length))];
+        const steps = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0)));
+        for (let s = 0; s <= steps; s++) ctx.fillRect(Math.round(x0 + (x1 - x0) * s / steps), Math.round(y0 + (y1 - y0) * s / steps), 1, 1);
+      }
+    },
+    debris(l, t, dt) {
+      if (!l._p) {
+        l._p = [];
+        // prewarm (s): run the simulation ahead so pieces are already in flight on the first frame.
+        for (let i = 0; i < (l.prewarm ?? 0) * 30; i++) stepDebris(l, 1 / 30);
+      }
+      stepDebris(l, dt);
+      const colors = l.colors ?? (l.kind === 'rock' ? ['#2a2226', '#3e3438'] : ['#9fb4c8', '#cfe0ec']);
+      for (const p of l._p) {
+        const x = Math.round(p.x), y = Math.round(p.y);
+        if (l.trail) {
+          // Motion streak: `trail` px behind the piece along its velocity, in the trail colour.
+          const v = Math.hypot(p.vx, p.vy) || 1;
+          ctx.fillStyle = l.trailColor ?? colors[0];
+          for (let i = 1; i <= l.trail; i++) ctx.fillRect(Math.round(p.x - p.vx / v * i), Math.round(p.y - p.vy / v * i), 1, 1);
+        }
+        ctx.fillStyle = colors[p.c % colors.length];
+        if (l.kind === 'rock') {
+          ctx.fillRect(x, y, p.s, p.s - 1 || 1);
+          ctx.fillRect(x + 1, y + p.s - 1, Math.max(1, p.s - 2), 1);
+        } else {
+          // Glass sliver: a 1px line of length s whose direction tumbles through 4 orientations.
+          const o = Math.floor(((p.rot % 4) + 4) % 4), d = [[1, 0], [1, 1], [0, 1], [-1, 1]][o];
+          for (let i = 0; i < p.s; i++) ctx.fillRect(x + d[0] * i, y + d[1] * i, 1, 1);
+          if (l.glint && hash(Math.floor(t * 8), p.x * 0.13 + p.c) > 0.86) {
+            ctx.fillStyle = l.glint;
+            ctx.fillRect(x, y, 1, 1);
+          }
+        }
+      }
+    },
+    vignette(l) {
+      const r = Math.hypot(W, H) / 2, g = ctx.createRadialGradient(W / 2, H / 2, r * (l.inner ?? 0.55), W / 2, H / 2, r);
+      g.addColorStop(0, 'transparent');
+      g.addColorStop(1, l.color ?? '#000000');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
     },
     particles(l, t, dt) {
       const len = l.length ?? 4, speed = l.speed ?? 180;
