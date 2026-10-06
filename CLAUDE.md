@@ -36,6 +36,7 @@ shared/
                                 #   drawn over "far" layers so they pass behind the ruins), drafts/ (bg_v<N>_seed<S>.png)
   characters/grin/              # the grinning pale man: head.png (320x200 sky head), body.png (full body v9, 256x372),
                                 #   drafts/ (head*, _sheet_head*, body_*, head7302_crop, inpaint sources re_* / v*_*), refs/
+                                #   portrait/ — "not fully turned" grin portrait (drafts/, refs/), see its section
   characters/demon/             # four-armed white demon: demon_v3_64_{south,south-west,west}.png, demon_breath_64x7.png, frames/
   effects/smoke/                # distant smoke loop smoke_pixmm_64x128x16_seed8601.png (+ its pixen still), frames/
 wallpapers/<name>/
@@ -96,6 +97,17 @@ Separate from the wallpaper: a full-height version of the grin head, same face/e
 - **v8** (`body_tall_v8.png` 256x380, 0 gens) after "even shorter": 4 neck rows cut from v5 in total (neck = 3 rows, 92..94, collar from 95), same hand-painted shading + veins continuing into the collar V. Zoom `refs/body_tall_v8_neck_zoom.png`.
 - **v9** (`body_tall_v9.png` 256x372, 0.1 gen) after "head a bit smaller again": head re-scaled **from the original 7302 pixels** (v2 crop 80x104 → 64x84 = 80%, never from an already-scaled head), palette snap + `correct_pixelart` 0.25, body of v8 pulled up 8 rows. **Chosen as the base** (user: "we keep this one as the base for now") → `shared/characters/grin/body.png`. Comparison `refs/body_tall_v9_compare.png`.
 - Inline image gotcha: MCP truncates base64 around ~8k chars ("keyframe image is incomplete") → re-encode as an indexed PNG (`scripts/png_index.py`, pure python+zlib; needs ≤256 colours — run `scripts/snap.py` first if a crop has more): 256x256 tiles drop to 2–4k chars.
+
+## Shared item: grin portrait (2026-10-06, in progress) — `shared/characters/grin/portrait/`
+
+Not a wallpaper: a standalone portrait of the grin **before the full transformation**. Inspiration = an image the user sent (pale youth, hollow sunken eyes, dark red streaks from one eye and the mouth corners, messy hair, black high collar, black background) — **described in the prompt only, never uploaded to PixelLab** (third-party art: take the mood, not a copy). Changes vs the inspiration (user): on the **right side of the face (taken as the viewer's right — confirm)** black veins spread from the right eye in all directions and that eye glows red; same blank expression. Hair made dark (grin), not light brown.
+- Prompt wording: no "blood"/"bleeding" (PixelLab content filter) → "thin dark red streaks running down the cheek like tears … from both corners of his closed mouth".
+- Round 1 (28 gens): pixen 256x256 seeds 13001–13003 (1 gen each: 13002 closest — red eye + veins right, streaks left/mouth; 13001 orange-red eye; 13003 no streaks) and Pro 168 seed 13101 (25 gens, 4 cand.: creepier and closer to the inspiration's mood — clouded dead left eye; **c0 / c2 best**; Pro left a 1px light frame on the canvas border, trim it). Sheet `refs/portrait_candidates.png`.
+- **User picked Pro c0** → `portrait/portrait_c0_168.png` (Pro's 1px light border frame painted black). Round 2 (~79 gens), user: "a lower-resolution version, one closer to the sketch (dark background etc.), and a few alternatives, maybe a different vein style". Reference = c0 snapped to 15 colours + 5 reds (7.5k base64; 20+6 colours was still 8.3k).
+  - Lower res: `edit_image_pixen` at 128 / 112 (1 gen each): both keep the look; the 128 one has a dark hollow left eye socket like the inspiration.
+  - Closer to the sketch: Pro 168 with c0 as reference, "face emerging from total darkness, dim light from the upper left" (25 gens): **c2** is the one — face dissolving into black; c0/c1/c3 invented a stone-wall background.
+  - Vein styles: Pro "black ink-like veins seeping like tendrils" (25 gens): c1 (3/4 turn, veins over the whole right side) and c2 stand out; pixen edits (1 gen each): "spiderweb capillaries" came out as a literal spider web (campy), "thick swollen root-like veins" = a dark root splotch, strong.
+  - Pro again left light frames/margins on some candidates — trim before use. Sheet `refs/portrait_round2.png`.
 
 ## Wallpaper: "rooftop-clash" (planned 2026-10-04, **released 2026-10-06** — see Status "Release")
 
