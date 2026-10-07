@@ -47,7 +47,7 @@ wallpapers/<name>/
 scripts/                        # git-sync.ps1, mcp-headers.ps1, screenshot.ps1, despeckle.ps1, contact-sheet.ps1 (tile candidates at 3x for comparison), sprite-sheet.ps1 (frames → 1-row sheet), fg-cutout.ps1 (bg minus sky → bg_fg.png), hole-mask.ps1 (layer mask from dark openings in bg), strip-grey.ps1 (remove baked-in smoke from a fire sheet), bundle.ps1 (Lively folder + zip), png_index.py / snap.py / finish.py (python+zlib PNG helpers: indexed re-encode for inline MCP uploads, palette snap after downscaling, row cut + speck removal)
 ```
 
-Current wallpapers: `burning-city-grin` (ruined-city was merged into it); `rooftop-clash` (released, see its section). Scene is `scene.js` (not JSON) so pages work from `file://` without a server — `fetch` of local JSON is blocked there. Asset paths in scene.js are relative to the wallpaper's index.html (shared art = `../../shared/<kind>/<name>/...`). Missing images render as magenta rects, so scenes can reference assets before they exist; `rect` layers are explicit placeholders.
+Current wallpapers: `burning-city-grin` (ruined-city was merged into it); `rooftop-clash` (released, see its section); `otherworld` in progress (see its section). Scene is `scene.js` (not JSON) so pages work from `file://` without a server — `fetch` of local JSON is blocked there. Asset paths in scene.js are relative to the wallpaper's index.html (shared art = `../../shared/<kind>/<name>/...`). Missing images render as magenta rects, so scenes can reference assets before they exist; `rect` layers are explicit placeholders.
 Engine: integer scale = floor(min(screenW/512, screenH/288)), letterboxed (1080p → x3); frame cap `maxFps` (default 30); `?grid` URL flag draws a 16px grid + layer outlines.
 **Verify visually** with `scripts/screenshot.ps1 <name> [out.png] [-Grid]` (headless Edge, 2560x1440), then Read the PNG. The script waits for Edge (Start-Process -Wait); an all-black PNG means the page didn't render. `-Query "head=264&lift=40"` passes URL params for scene variants, `-Dist` renders the bundle in dist/.
 Lively imports one folder: `scripts/bundle.ps1 <name>` flattens the `../../` paths into `dist/<name>/` + a zip to drop into Lively. It copies all of `shared/` except `drafts/`, `refs/`, `frames/` (structure kept), and the wallpaper's `assets/` minus `drafts/` and `frames/` — **scenes must reference only finals at the top level of `assets/`** (promote a chosen draft by copying it there under a plain name), so scene variants that point into shared drafts (e.g. `?head=224`) work only from the repo.
@@ -112,6 +112,27 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
   - **Eye refactor (0 gens)**, user: "the eyes you added look creepy". The inpainted eyes were off-style (photoreal, white sclera) and the hand-painted round red eye too. Both portraits now get **hand-painted eyes from one almond template** (heavy dark upper lid, muted grey sclera, dark iris + 1 px highlight, lid shadow line; the red eye = same shape with a glowing #FC0103 iris and an #FF6A3C/#FFC8A8 hot core) painted onto the untouched source drafts (scratchpad `paint_eyes.ps1` + a JSON spec per portrait). Socket handling, after several failed tries: a repainted gradient socket showed concentric "target" rings, a flat skin ellipse read as a light goggle. What worked: **keep the model's own socket**. For the 128, only its maroon "torn-out hole" tones are recoloured into dark grey shadow tones; for the ink, nothing around the eye is touched. On the red side, black vein pixels are kept and the old red pupil is cleared first.
   - **Final decision (user, 2026-10-06): only `portrait_256.png` is kept** ("the others are pretty ugly"). `portrait_128`, `portrait_ink_168`, their source drafts and `refs/portrait_finals.png` were deleted. The folder now holds `portrait_256.png` + `drafts/portrait_pixen_256_seed13002.png`. Takeaway: the untouched pixen 256 beat every hand- or inpaint-fixed variant. For this kind of portrait, pick the cleanest raw generation rather than repairing a weaker one.
   - Lessons: check small glowing eyes at zoom — Pro likes heart/odd-shaped pupils; "dead clouded eye" from the inspiration was not wanted (user: the eye isn't blind / isn't torn out) → for this character keep the human-side eye alive. PowerShell variables are case-insensitive (`$P` = `$p`) — never reuse a name differing only in case. When repainting a feature, recolour inside the existing shading instead of filling a new shape: a filled ellipse always shows up as a ring or a patch.
+
+## Wallpaper: "otherworld" (started 2026-10-07, in progress) — `wallpapers/otherworld/`
+
+**Brief (user):** a horror-game-style "other world" shift (inspired by a well-known survival-horror town — **never name the franchise in prompts**). First-person view from the street looking up; mid-rise blocks (5–6 storeys) towering up; rust and dark red stains; a black sky cut by one murky dull-orange band that looks like a river; particles peeling off the walls as the town shifts into the other world.
+- Round 1 (4 gens): Pixen 512x288, `highly detailed`. Prompt A (14001/14002): "first-person worm's-eye view, standing in a narrow street and looking steeply up between old mid-rise apartment buildings … lean inward, converging toward the top centre … thick rust, peeling flaking paint, corroded metal grating, dark red stains dripping down from the windows … pitch black sky cut through by one murky dull orange band that winds across the sky like a river". Prompt B (14003/14004): "view from the ground looking straight up … facades rise from all four edges toward a central opening of sky". Results:
+  - **14001**: best match. Two blocks lean in, with dripping stains, AC units and barred balconies; a clean winding orange river.
+  - 14002: smoky, murky river, distant block at the vanishing point.
+  - 14003: the river is a churning murky cloud band (the most "murky").
+  - 14004: almost straight up from the street (4-side perspective, too top-down).
+
+  Sheet: `refs/bg_round1.png`. Draft names: `assets/drafts/bg_pixen_512x288_seed<S>.png`. The scene picks one via `?bg=14001..14004`; the default `assets/bg.png` is 14001 for now (provisional until the user picks).
+- New engine layer **`peel`**: the shift flakes. Each flake spawns on the wall areas, clings curling up (dark gap + lifting strip), tears off and drifts toward a `vanish` point in the sky with sway. It flips over, showing the wall's paint on one side and a dark rusted underside (`back`) on the other, with a 1px glowing torn `edge`, then shrinks and crumbles into ash. Colours come from the scene (no `getImageData` on `file://`): pale beige-grey/rust paint taken from bg.png.
+- Scene (round 1):
+  - bg;
+  - 5 weak pulsing `glow`s along the river (#c8762e, alpha 0.16, 0.12 Hz);
+  - `peel` (14/s, size 3–7, prewarm 10, vanish (318,-30));
+  - rising ash particles;
+  - vignette.
+
+  Render: `refs/composite_round1.png`. Static shots barely show the flakes; judge them live.
+- `scripts/screenshot.ps1`: pass an **absolute** out path. A relative one is resolved against Edge's working directory and the PNG lands elsewhere.
 
 ## Wallpaper: "rooftop-clash" (planned 2026-10-04, **released 2026-10-06** — see Status "Release")
 

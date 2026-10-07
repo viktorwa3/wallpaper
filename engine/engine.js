@@ -48,6 +48,11 @@
 //               colors, glint, trail, trailColor }  pieces spawned in `area` at `rate`/s: glass = tumbling 2–3 px slivers
 //               that flash a `glint` pixel now and then, rock = small dark chunks; trail = motion streak length in px.
 //               Removed once off screen. An area just off one edge + fast vx = pieces flying across the whole frame.
+//   peel        { areas: [[x, y, w, h], ...], rate, size: [min, max], cling: [min, max], life: [min, max], speed: [min, max],
+//               vanish: [x, y], sway, colors, back, edge, under, ash, prewarm }  the "shift into the other world" flakes: each
+//               flake appears on a wall patch (area-weighted pick), clings curling up for `cling` s (dark `under` gap +
+//               lifting strip), then tears off and drifts toward `vanish` (px/s `speed`, sideways `sway`), turning over
+//               (width flutters, showing the dark `back` side half the time), shrinking, and crumbling into `ash` pixels over its last third. edge = 1px glowing torn edge.
 //   vignette    { color, alpha, inner }                     darkens the frame edges (radial, transparent inside `inner` 0..1).
 //   particles   { count, color, speed, angle, length }      procedural rain
 // Common: id, z, alpha (0..1), blend (canvas globalCompositeOperation, e.g. "lighter"),
@@ -344,6 +349,32 @@
     l._p = l._p.filter(p => p.y < H + 8 && !(p.x < -40 && p.vx <= 0) && !(p.x > W + 40 && p.vx >= 0));
   }
 
+  // peel simulation step: flakes spawn on the walls (`areas`), cling for `cling` s, then drift toward `vanish`.
+  function stepPeel(l, dt) {
+    const areas = l.areas ?? [[0, 0, W, H]], rnd = (lo, hi) => lo + Math.random() * (hi - lo);
+    const total = areas.reduce((s, a) => s + a[2] * a[3], 0);
+    l._acc = (l._acc ?? 0) + dt * (l.rate ?? 4);
+    while (l._acc >= 1) {
+      l._acc -= 1;
+      let k = Math.random() * total, a = areas[0];
+      for (const b of areas) { if ((k -= b[2] * b[3]) <= 0) { a = b; break; } }   // area-weighted pick
+      const [s0, s1] = l.size ?? [2, 4];
+      l._p.push({ x: rnd(a[0], a[0] + a[2]), y: rnd(a[1], a[1] + a[3]), age: 0, life: rnd(...(l.life ?? [5, 9])),
+        cling: rnd(...(l.cling ?? [0.4, 1.2])), s: Math.round(rnd(s0, s1 + 0.99)), sp: rnd(...(l.speed ?? [10, 22])),
+        ph: Math.random() * 6.28, fl: rnd(1.5, 3.5), c: Math.floor(Math.random() * 1e6) });
+    }
+    const [vx, vy] = l.vanish ?? [W / 2, -40];
+    for (const p of l._p) {
+      p.age += dt;
+      if (p.age < p.cling) continue;
+      // Pulled toward the vanishing point (looking up: away from the viewer), swaying sideways as it goes.
+      const dx = vx - p.x, dy = vy - p.y, d = Math.hypot(dx, dy) || 1;
+      p.x += (dx / d * p.sp + Math.sin(p.age * 1.7 + p.ph) * (l.sway ?? 6)) * dt;
+      p.y += dy / d * p.sp * dt;
+    }
+    l._p = l._p.filter(p => p.age < p.life && p.y > -10);
+  }
+
   const draw = {
     image(l) {
       if (!l._img) return drawRect(l, '#f0f', l.id);
@@ -539,6 +570,44 @@
           }
         }
       }
+    },
+    peel(l, t, dt) {
+      if (!l._p) {
+        l._p = [];
+        for (let i = 0; i < (l.prewarm ?? 0) * 30; i++) stepPeel(l, 1 / 30);
+      }
+      stepPeel(l, dt);
+      const colors = l.colors ?? ['#3a2420', '#5a3426', '#6e4a3a'];
+      const base = ctx.globalAlpha;
+      for (const p of l._p) {
+        const x = Math.round(p.x), y = Math.round(p.y), col = colors[p.c % colors.length];
+        const free = p.age >= p.cling, k = free ? (p.age - p.cling) / (p.life - p.cling) : 0;   // 0 → 1 over the flight
+        // Shrinks with distance; the last third crumbles into single ash pixels and fades.
+        const s = Math.max(1, Math.round(p.s * (1 - 0.5 * k)));
+        ctx.globalAlpha = base * (k > 0.66 ? (1 - k) / 0.34 : 1);
+        if (!free) {
+          // Clinging: a curled-up corner — the flake lifts off its patch of wall, one edge catching the light.
+          const lift = Math.floor(p.age / p.cling * 3);
+          ctx.fillStyle = l.under ?? '#120808';
+          ctx.fillRect(x, y, p.s, Math.max(1, p.s - 1));
+          ctx.fillStyle = col;
+          ctx.fillRect(x, y - lift + 1, p.s, 1);
+          if (l.edge) { ctx.fillStyle = l.edge; ctx.fillRect(x + p.s - 1, y - lift + 1, 1, 1); }
+          continue;
+        }
+        if (k > 0.66) {
+          ctx.fillStyle = l.ash ?? col;
+          ctx.fillRect(x, y, 1, 1);
+          if (s > 1) ctx.fillRect(x + 2, y + 1, 1, 1);
+          continue;
+        }
+        // Flutter: the flake turns over, so its drawn width swings between s and 1 px.
+        const turn = Math.cos(p.age * p.fl + p.ph), w = Math.max(1, Math.round(s * Math.abs(turn)));
+        ctx.fillStyle = turn < 0 && l.back ? l.back : col;   // the painted face, then the dark rusted underside
+        ctx.fillRect(x - (w >> 1), y, w, Math.max(1, s - 1));
+        if (l.edge && w > 1) { ctx.fillStyle = l.edge; ctx.fillRect(x - (w >> 1), y, 1, 1); }   // glowing torn edge
+      }
+      ctx.globalAlpha = base;
     },
     vignette(l) {
       const r = Math.hypot(W, H) / 2, g = ctx.createRadialGradient(W / 2, H / 2, r * (l.inner ?? 0.55), W / 2, H / 2, r);
