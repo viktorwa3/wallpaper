@@ -53,9 +53,18 @@
 //               flake appears on a wall patch (area-weighted pick), clings curling up for `cling` s (dark `under` gap +
 //               lifting strip), then tears off and drifts toward `vanish` (px/s `speed`, sideways `sway`), turning over
 //               (width flutters, showing the dark `back` side half the time), shrinking, and crumbling into `ash` pixels over its last third. edge = 1px glowing torn edge.
+//   murk        { x, y, w, h, color, scale, drift: [vx, vy], curl, cover, soft, density, levels, fps }  drifting dark fog:
+//               domain-warped noise sliding at `drift` px/s and churning at `curl`; cover 0..1 = noise level where it
+//               starts (higher = thinner fog), soft = transition width, density = max alpha; alpha is posterized into
+//               `levels` steps with an ordered dither (crisp single-colour pixels). Pair with `mask` to keep it in the sky.
+//   rise        { count, area, speed: [min, max], life: [min, max], size: [min, max], sway, colors, edge, emberChance, embers }
+//               motes floating up everywhere: each fades in somewhere in `area`, rises at `speed` px/s with a sway,
+//               and dissolves after `life` s. Flakes turn over (width swings, `edge` = lit rim); a share `emberChance`
+//               are 1px smouldering embers in `embers` colours (flickering, a dim cross around the bigger ones).
 //   vignette    { color, alpha, inner }                     darkens the frame edges (radial, transparent inside `inner` 0..1).
 //   particles   { count, color, speed, angle, length }      procedural rain
 // Common: id, z, alpha (0..1), blend (canvas globalCompositeOperation, e.g. "lighter"),
+//         pulse: { amp, hz, phase } — slow alpha swing (dims by up to amp of alpha; any layer, masked ones too),
 //         bob: { amp, period, phase } — slow vertical sway in whole pixels (layers with the same bob move together);
 //         clip: [[x, y, w, h], ...] canvas rects — the layer is drawn only inside their union;
 //         mask: canvas-sized PNG — the layer is drawn only where the mask is opaque (scripts/hole-mask.ps1 builds one
@@ -375,6 +384,37 @@
     l._p = l._p.filter(p => p.age < p.life && p.y > -10);
   }
 
+  // murk: drifting, churning dark fog. Domain-warped fbm → coverage → alpha, posterized into `levels` steps with
+  // an ordered dither between them, so it stays crisp pixels in a single colour.
+  function renderMurk(l, t) {
+    const { w, h } = l, px = l._data.data, [r, g, b] = hexToRgb(l.color ?? '#000000');
+    const scale = l.scale ?? 40, [vx, vy] = l.drift ?? [3, -2], curl = (l.curl ?? 0.05) * t;
+    const cover = l.cover ?? 0.5, soft = l.soft ?? 0.15, levels = l.levels ?? 4, maxA = l.density ?? 0.9;
+    const ox = (l.x - vx * t) / scale, oy = (l.y - vy * t) / scale;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const u = x / scale + ox, v = y / scale + oy;
+        const wu = fbm(u * 0.7 + curl, v * 0.7 + 3.1), wv = fbm(u * 0.7 + 7.7, v * 0.7 - curl);
+        const n = fbm(u + wu * 1.6, v + wv * 1.6);
+        let a = Math.min(1, Math.max(0, (n - cover + soft) / (2 * soft)));
+        a = a * a * (3 - 2 * a) * levels;
+        const lo = Math.floor(a), q = (lo + (a - lo > BAYER4[(y & 3) * 4 + (x & 3)] ? 1 : 0)) / levels;
+        const i = (y * w + x) * 4;
+        px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = Math.round(q * maxA * 255);
+      }
+    }
+    l._bctx.putImageData(l._data, 0, 0);
+  }
+
+  // rise: a mote spawned anywhere in `area` (default the whole canvas); fresh = prewarm (random age).
+  function spawnRise(l, fresh) {
+    const [ax, ay, aw, ah] = l.area ?? [0, 0, W, H], rnd = (lo, hi) => lo + Math.random() * (hi - lo);
+    const life = rnd(...(l.life ?? [5, 10])), [s0, s1] = l.size ?? [1, 3];
+    return { x: rnd(ax, ax + aw), y: rnd(ay, ay + ah), v: rnd(...(l.speed ?? [6, 16])), life, age: fresh ? Math.random() * life : 0,
+      s: Math.round(rnd(s0, s1 + 0.99)), ph: Math.random() * 6.28, fl: rnd(1, 2.5), c: Math.floor(Math.random() * 1e6),
+      ember: Math.random() < (l.emberChance ?? 0) };
+  }
+
   const draw = {
     image(l) {
       if (!l._img) return drawRect(l, '#f0f', l.id);
@@ -609,6 +649,56 @@
       }
       ctx.globalAlpha = base;
     },
+    murk(l, t) {
+      if (!l._buf) {
+        l._buf = document.createElement('canvas');
+        l._buf.width = l.w;
+        l._buf.height = l.h;
+        l._bctx = l._buf.getContext('2d');
+        l._data = l._bctx.createImageData(l.w, l.h);
+        l._next = -1;
+      }
+      if (t >= l._next) {
+        l._next = t + 1 / (l.fps ?? 10);
+        renderMurk(l, t);
+      }
+      ctx.drawImage(l._buf, l.x, l.y);
+    },
+    rise(l, t, dt) {
+      if (!l._p) l._p = Array.from({ length: l.count ?? 60 }, () => spawnRise(l, true));
+      const base = ctx.globalAlpha, sway = l.sway ?? 4;
+      for (let i = 0; i < l._p.length; i++) {
+        let p = l._p[i];
+        p.age += dt;
+        if (p.age >= p.life) p = l._p[i] = spawnRise(l, false);
+        p.y -= p.v * dt;
+        p.x += Math.sin(p.age * p.fl + p.ph) * sway * dt;
+        // Fades in, hangs, fades out — the motes appear out of nothing and dissolve on the way up.
+        const k = p.age / p.life, fade = Math.min(1, k / 0.2, (1 - k) / 0.3);
+        const x = Math.round(p.x), y = Math.round(p.y);
+        if (p.ember) {
+          // Embers smoulder: brightness flickers, the core stays 1px, a dim cross around the bigger ones.
+          const fl = 0.55 + 0.45 * valueNoise(t * 3 + p.ph * 10, p.ph * 7);
+          ctx.globalAlpha = base * fade * fl;
+          const em = l.embers ?? ['#ffa040'];
+          ctx.fillStyle = em[p.c % em.length];
+          ctx.fillRect(x, y, 1, 1);
+          if (p.s > 1) {
+            ctx.globalAlpha = base * fade * fl * 0.35;
+            ctx.fillRect(x - 1, y, 1, 1); ctx.fillRect(x + 1, y, 1, 1); ctx.fillRect(x, y - 1, 1, 1); ctx.fillRect(x, y + 1, 1, 1);
+          }
+          continue;
+        }
+        // Flakes of ash/paint turning over as they float up: width swings between s and 1 px.
+        const turn = Math.cos(p.age * p.fl * 1.3 + p.ph), w = Math.max(1, Math.round(p.s * Math.abs(turn)));
+        ctx.globalAlpha = base * fade;
+        const cs = l.colors ?? ['#3a2a26'];
+        ctx.fillStyle = cs[p.c % cs.length];
+        ctx.fillRect(x - (w >> 1), y, w, Math.max(1, p.s - 1));
+        if (l.edge && w > 1 && turn > 0) { ctx.fillStyle = l.edge; ctx.fillRect(x - (w >> 1), y, 1, 1); }
+      }
+      ctx.globalAlpha = base;
+    },
     vignette(l) {
       const r = Math.hypot(W, H) / 2, g = ctx.createRadialGradient(W / 2, H / 2, r * (l.inner ?? 0.55), W / 2, H / 2, r);
       g.addColorStop(0, 'transparent');
@@ -670,13 +760,13 @@
           offCtx.restore();
           ctx = screen;
           ctx.save();
-          ctx.globalAlpha = l.alpha ?? 1;
+          ctx.globalAlpha = layerAlpha(l, acc);
           if (l.blend) ctx.globalCompositeOperation = l.blend;
           ctx.drawImage(off, 0, 0);
           ctx.restore();
           continue;
         }
-        drawLayer(l, l, acc, dt);
+        drawLayer(l, { ...l, alpha: layerAlpha(l, acc) }, acc, dt);
       }
       if (debug) drawDebug(layers);
     }
@@ -686,6 +776,14 @@
   // Vertical sway in whole pixels (stays crisp): amp px, period s, phase 0..1. Layers sharing a bob move together.
   function bobOffset(b, t) {
     return Math.round((b.amp ?? 2) * Math.sin((t / (b.period ?? 6) + (b.phase ?? 0)) * Math.PI * 2));
+  }
+
+  // alpha × the optional slow pulse { amp, hz, phase }: amp 0..1 = how far it dims at the bottom of the swing.
+  function layerAlpha(l, t) {
+    const p = l.pulse;
+    if (!p) return l.alpha ?? 1;
+    const s = 0.5 + 0.5 * Math.sin((t * (p.hz ?? 0.2) + (p.phase ?? 0)) * Math.PI * 2);
+    return (l.alpha ?? 1) * (1 - (p.amp ?? 0.5) * (1 - s));
   }
 
   function drawLayer(l, opts, t, dt) {

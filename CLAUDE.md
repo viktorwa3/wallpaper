@@ -44,7 +44,7 @@ wallpapers/<name>/
   scene.js                      # window.SCENE = { canvas, maxFps, layers: [...] }; shared art via '../../shared/...'
   assets/                       # this wallpaper's own art; drafts/ = candidates (<what>_<model>_<WxH>_seed<S>[_c<i>].png)
   refs/                         # sketches, references (not shipped)
-scripts/                        # git-sync.ps1, mcp-headers.ps1, screenshot.ps1, despeckle.ps1, contact-sheet.ps1 (tile candidates at 3x for comparison), sprite-sheet.ps1 (frames → 1-row sheet), fg-cutout.ps1 (bg minus sky → bg_fg.png), hole-mask.ps1 (layer mask from dark openings in bg), strip-grey.ps1 (remove baked-in smoke from a fire sheet), bundle.ps1 (Lively folder + zip), png_index.py / snap.py / finish.py (python+zlib PNG helpers: indexed re-encode for inline MCP uploads, palette snap after downscaling, row cut + speck removal)
+scripts/                        # git-sync.ps1, mcp-headers.ps1, screenshot.ps1, despeckle.ps1, contact-sheet.ps1 (tile candidates at 3x for comparison), sprite-sheet.ps1 (frames → 1-row sheet), fg-cutout.ps1 (bg minus sky → bg_fg.png), hole-mask.ps1 (layer mask from dark openings in bg), strip-grey.ps1 (remove baked-in smoke from a fire sheet), bundle.ps1 (Lively folder + zip), sky-mask.py (sky mask + glowing band layer from a bg), png_index.py / snap.py / finish.py (python+zlib PNG helpers: indexed re-encode for inline MCP uploads, palette snap after downscaling, row cut + speck removal)
 ```
 
 Current wallpapers: `burning-city-grin` (ruined-city was merged into it); `rooftop-clash` (released, see its section); `otherworld` in progress (see its section). Scene is `scene.js` (not JSON) so pages work from `file://` without a server — `fetch` of local JSON is blocked there. Asset paths in scene.js are relative to the wallpaper's index.html (shared art = `../../shared/<kind>/<name>/...`). Missing images render as magenta rects, so scenes can reference assets before they exist; `rect` layers are explicit placeholders.
@@ -122,7 +122,7 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
   - 14003: the river is a churning murky cloud band (the most "murky").
   - 14004: almost straight up from the street (4-side perspective, too top-down).
 
-  Sheet: `refs/bg_round1.png`. Draft names: `assets/drafts/bg_pixen_512x288_seed<S>.png`. The scene picks one via `?bg=14001..14004`; the default `assets/bg.png` is 14001 for now (provisional until the user picks).
+  Sheet: `refs/bg_round1.png`. Draft names: `assets/drafts/bg_pixen_512x288_seed<S>.png`. Compare them in the scene with `?bg=<draft file name>`. The default `assets/bg.png` is now 14003 rotated 4° (see round 2).
 - New engine layer **`peel`**: the shift flakes. Each flake spawns on the wall areas, clings curling up (dark gap + lifting strip), tears off and drifts toward a `vanish` point in the sky with sway. It flips over, showing the wall's paint on one side and a dark rusted underside (`back`) on the other, with a 1px glowing torn `edge`, then shrinks and crumbles into ash. Colours come from the scene (no `getImageData` on `file://`): pale beige-grey/rust paint taken from bg.png.
 - Scene (round 1):
   - bg;
@@ -133,6 +133,37 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
 
   Render: `refs/composite_round1.png`. Static shots barely show the flakes; judge them live.
 - `scripts/screenshot.ps1`: pass an **absolute** out path. A relative one is resolved against Edge's working directory and the PNG lands elsewhere.
+- **Round 2 (2026-10-07, 3 gens).** The user picked **14003**. Requests: tilt it slightly, make the band glow through black haze, and add particles flying up as in the other-world transition.
+  - **Tilt.**
+    - Pixen with "dutch angle, rotated ~6° clockwise" (seeds 14101–14103) barely tilted. It also lost the murky river: it drew cartoon cumulus bands instead. Rejected; kept in drafts.
+    - Used instead: **14003 rotated 4° clockwise locally** (round 3: 7°), nearest-neighbour with zoom 1.12 to fill the corners (scratchpad `rotbg.ps1`). At 4° the jaggies are barely visible. Saved as `drafts/bg_14003_rot4_nearest.png`, which is now `assets/bg.png`.
+  - **Band glow through haze.** `scripts/sky-mask.py bg.png prefix L0,L1,R0,R1 seeds…` flood-fills the sky between the blocks. Sky pixels are near-black or orange band pixels (G−B > 22).
+    - The left/right limit lines stop it leaking into dark windows and shadows. Without them it ran into the right block.
+    - The limits only cross black areas, so the straight edges don't show.
+    - Outputs: `assets/sky_mask.png`, and `assets/band.png` (the band's own pixels, brightened).
+    - Layer stack:
+      - z1: band.png, `lighter` 0.6, with the new common option **`pulse`** `{ amp, hz, phase }`.
+      - z2: 6 halo `glow`s, masked to the sky.
+      - z3: new engine layer **`murk`**: domain-warped fbm fog in #030203, drifting up-right along the band. Alpha is posterized to 4 levels with Bayer dither; cover 0.5, density 0.85, masked to the sky. At cover 0.42 / density 0.92 it hid the band almost completely.
+      - z4: 4 weak `seep` glows on top of the fog.
+  - **Upward particles.** New engine layer **`rise`**: 110 motes that fade in anywhere, float up at 5–14 px/s with sway, and dissolve after 5–11 s. They are turning dark ash flakes plus 22% flickering embers. No spawner, so headless shots show them too. `peel` moved onto the new wall areas: vanish point (300,-30), 10/s.
+  - Render: `refs/composite_round2.png`.
+  - Engine gotcha: `BAYER4` already exists, normalized to 0..1. A second `const` with the same name crashes the page (black screen).
+  - `scripts/png_index.py` now has a `__main__` guard: importing it used to run its CLI on the importer's argv.
+- **Round 3 (2026-10-07, 0 gens).** User: "more tilt, thicker black smog, a slightly brighter band".
+  - **Tilt:** 14003 rotated **7°** (zoom 1.21) → `drafts/bg_14003_rot7_nearest.png` = `assets/bg.png`. Pixel-art rotation is still readable at 7°.
+  - **Sky mask** rebuilt: `sky-mask.py bg.png drafts/rot7 206,238,374,354 290,20 280,150 300,250 250,70` → `assets/sky_mask.png`, `assets/band.png`. **Rebuild both whenever bg.png changes.**
+  - **Fog** denser: cover 0.43, density 0.96, 5 levels.
+  - **Band** brighter: alpha 0.9, pulse amp 0.5; halo glows 0.4.
+  - Dense fog alone swallowed the band. The fix is a second band pass **above** the fog: `bandThrough`, the same band.png, `lighter` 0.4, z 4. The band now reads as shining through the smog.
+  - Render: `refs/composite_round3.png`.
+- **Variant 14103 (2026-10-07, 0 gens).** User: apply the same effects to `drafts/bg_pixen_512x288_seed14103.png` (the cartoon-cloud "dutch angle" draft, used unrotated).
+  - scene.js now has a variant table `V` (bg, sky mask, band, halo/seep positions, murk x/w, peel wall areas, vanish point, paint colours, optional `bandAlpha`). `?bg=14103` selects it; the default stays `main`.
+  - Finals: `assets/bg_14103.png`, `sky_mask_14103.png`, `band_14103.png`, built with `sky-mask.py … 172,172,450,450 250,30 330,10 300,130 400,70`. The sky is wide, so the limits only stop leaks into the left block's dark eaves.
+  - Band alpha is 0.55: the clouds are big solid shapes and blew out to yellow at 0.9.
+  - Peel walls: the left block, the right block and the small middle blocks.
+  - Render: `refs/composite_14103.png`.
+  - Lively bundles only the default variant. To ship 14103, make it `main`.
 
 ## Wallpaper: "rooftop-clash" (planned 2026-10-04, **released 2026-10-06** — see Status "Release")
 

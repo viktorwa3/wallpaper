@@ -54,5 +54,6 @@ def write_indexed(path, w, h, px):
     return len(pal)
 
 
-w, h, px = read_png(sys.argv[1])
-print(sys.argv[2], w, 'x', h, write_indexed(sys.argv[2], w, h, px), 'colours')
+if __name__ == '__main__':
+    w, h, px = read_png(sys.argv[1])
+    print(sys.argv[2], w, 'x', h, write_indexed(sys.argv[2], w, h, px), 'colours')
