@@ -47,7 +47,7 @@ wallpapers/<name>/
 scripts/                        # git-sync.ps1, mcp-headers.ps1, screenshot.ps1, despeckle.ps1, contact-sheet.ps1 (tile candidates at 3x for comparison), sprite-sheet.ps1 (frames → 1-row sheet), fg-cutout.ps1 (bg minus sky → bg_fg.png), hole-mask.ps1 (layer mask from dark openings in bg), strip-grey.ps1 (remove baked-in smoke from a fire sheet), bundle.ps1 (Lively folder + zip), sky-mask.py (sky mask + glowing band layer from a bg), png_index.py / snap.py / finish.py (python+zlib PNG helpers: indexed re-encode for inline MCP uploads, palette snap after downscaling, row cut + speck removal)
 ```
 
-Current wallpapers: `burning-city-grin` (ruined-city was merged into it); `rooftop-clash` (released, see its section); `otherworld` (released 2026-10-08, see its section). Scene is `scene.js` (not JSON) so pages work from `file://` without a server — `fetch` of local JSON is blocked there. Asset paths in scene.js are relative to the wallpaper's index.html (shared art = `../../shared/<kind>/<name>/...`). Missing images render as magenta rects, so scenes can reference assets before they exist; `rect` layers are explicit placeholders.
+Current wallpapers: `burning-city-grin` (ruined-city was merged into it); `rooftop-clash` (released, see its section); `otherworld` (released 2026-10-08, see its section); `descent` in progress (see its section). Scene is `scene.js` (not JSON) so pages work from `file://` without a server — `fetch` of local JSON is blocked there. Asset paths in scene.js are relative to the wallpaper's index.html (shared art = `../../shared/<kind>/<name>/...`). Missing images render as magenta rects, so scenes can reference assets before they exist; `rect` layers are explicit placeholders.
 Engine: integer scale = floor(min(screenW/512, screenH/288)), letterboxed (1080p → x3); frame cap `maxFps` (default 30); `?grid` URL flag draws a 16px grid + layer outlines.
 **Verify visually** with `scripts/screenshot.ps1 <name> [out.png] [-Grid]` (headless Edge, 2560x1440), then Read the PNG. The script waits for Edge (Start-Process -Wait); an all-black PNG means the page didn't render. `-Query "head=264&lift=40"` passes URL params for scene variants, `-Dist` renders the bundle in dist/.
 Lively imports one folder: `scripts/bundle.ps1 <name>` flattens the `../../` paths into `dist/<name>/` + a zip to drop into Lively. It copies all of `shared/` except `drafts/`, `refs/`, `frames/` (structure kept), and the wallpaper's `assets/` minus `drafts/` and `frames/` — **scenes must reference only finals at the top level of `assets/`** (promote a chosen draft by copying it there under a plain name), so scene variants that point into shared drafts (e.g. `?head=224`) work only from the repo.
@@ -116,6 +116,56 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
   - **Eye refactor (0 gens)**, user: "the eyes you added look creepy". The inpainted eyes were off-style (photoreal, white sclera) and the hand-painted round red eye too. Both portraits now get **hand-painted eyes from one almond template** (heavy dark upper lid, muted grey sclera, dark iris + 1 px highlight, lid shadow line; the red eye = same shape with a glowing #FC0103 iris and an #FF6A3C/#FFC8A8 hot core) painted onto the untouched source drafts (scratchpad `paint_eyes.ps1` + a JSON spec per portrait). Socket handling, after several failed tries: a repainted gradient socket showed concentric "target" rings, a flat skin ellipse read as a light goggle. What worked: **keep the model's own socket**. For the 128, only its maroon "torn-out hole" tones are recoloured into dark grey shadow tones; for the ink, nothing around the eye is touched. On the red side, black vein pixels are kept and the old red pupil is cleared first.
   - **Final decision (user, 2026-10-06): only `portrait_256.png` is kept** ("the others are pretty ugly"). `portrait_128`, `portrait_ink_168`, their source drafts and `refs/portrait_finals.png` were deleted. The folder now holds `portrait_256.png` + `drafts/portrait_pixen_256_seed13002.png`. Takeaway: the untouched pixen 256 beat every hand- or inpaint-fixed variant. For this kind of portrait, pick the cleanest raw generation rather than repairing a weaker one.
   - Lessons: check small glowing eyes at zoom — Pro likes heart/odd-shaped pupils; "dead clouded eye" from the inspiration was not wanted (user: the eye isn't blind / isn't torn out) → for this character keep the human-side eye alive. PowerShell variables are case-insensitive (`$P` = `$p`) — never reuse a name differing only in case. When repainting a feature, recolour inside the existing shading instead of filling a new shape: a filled ellipse always shows up as a ring or a patch.
+
+## Wallpaper: "descent" (started 2026-10-08, in progress) — `wallpapers/descent/`
+
+**Brief (user):** same horror-town otherworld theme, a bit more densely animated.
+- A huge lift platform descending fast on gears.
+- Side view, seen from the opposite corner. The gears sit on the platform edge; one in the far corner is enough.
+- The otherworld particles fly fast upward because of the descent.
+- Blackness at the top.
+- Sparks from the gear.
+- **The visible wall must show the lift moving.**
+
+**Plan:**
+- Static platform plus far corner from one Pixen composition.
+- The shaft walls as a vertically **seamless strip scrolling up** (made from the bg's own wall pixels), clipped to the wall area.
+- The gear as a separate **rotating** sprite.
+- A spark stream from the gear/rack contact.
+- Fast upward particles with streaks (`particles` / `rise`), plus a black top.
+
+- Round 1 (4 gens), Pixen 512x288 `highly detailed`, sheet `refs/bg_round1.png`, drafts `assets/drafts/bg_pixen_512x288_seed<S>.png`.
+  - Prompt A (15001/15002): "interior of a deep dark vertical industrial shaft, a huge square freight elevator platform … seen from its near corner looking diagonally across to the far corner, giant rusted cog wheel … meshes with a tall vertical toothed rack rail … top fades into pitch black".
+  - Prompt B (15003/15004): "side view across a gigantic rusted industrial elevator platform descending a dark vertical shaft … bottom 40% … low railings … upper part pitch black emptiness".
+  - Results:
+    - 15001: dense walls with pipes and chains, a grid deck, the gear behind the deck.
+    - 15002: a small platform in a wall box; the rack is beside the gear, not meshing with it.
+    - 15003: railing deck; the gear meshes with a rack; black void at top-left; one wall.
+    - **15004**: the best read. Big railing deck from the near corner; the gear clearly meshes with a toothed rack running up a riveted wall corner; black void over the left half; orange underglow along the deck edge.
+- **User sketch (2026-10-08).**
+  - Wall across the top, the cog in the top-right corner.
+  - A horizontal deck edge at ~45% height.
+  - The platform fills the whole bottom and runs past the frame; only the corner we look at is visible, at the right edge, with the drop beyond it.
+  - Read as: a flat head-on wall (easy to tile and scroll).
+- Round 2 (4 gens), sheet `refs/bg_round2.png`.
+  - Prompts: 15101/15102 with `view: side` ("bottom half is the top deck … far edge a straight horizontal line at 45% … only one corner visible at the right edge … narrow dark gap … flat wall seen straight on … rack near the right edge, huge cog in the top right corner"); 15103/15104 with an alternative wording.
+  - Results:
+    - 15101: a flat wall, the cog top-right on a rack; the deck is only a thin grating shelf at ~65%, with a void below.
+    - **15102**: closest to the sketch. A diamond-plate deck runs past the left and bottom edges, with one corner at the right and an orange-lit gap. The cog sits top-right beside a vertical rack. But the side walls make it a box, and the deck edge is at ~70%, not 45%.
+    - 15103: the cog meshes with the rack at the bottom right, deck strip.
+    - 15104: the cog sits on the deck corner, with a chain rack above and a truss under the deck.
+  - None puts the deck edge at 45%; Pixen pushes it lower.
+- **Round 3: 15101 + inpainted deck (2026-10-08, ~24 gens).** The user OK'd "15101's wall and cog + inpaint a massive deck below".
+  - `inpaint_image` at 512x288 fails with "Tier 2 is required" (not billed); the image went by `image_url` = the job's download URL, which avoids the inline-base64 limit.
+  - **Pro Flash inpaint** in two 256x196 tiles (canvas rows 92..288, mask from row 132 = 45%), 9 gens each, seeds 15211/15212:
+    - Left tile: a deck past the left/bottom edges.
+    - Right tile: the deck's only corner at the right with an orange-lit gap.
+    - Trick for the inline limit: **black out the masked area** before encoding (it is regenerated anyway), and keep only ~40 rows of wall context. The tiles dropped to 3–4k base64. The full tile with the cog was 10k.
+  - Seam at x=256 between the tiles: a third Pro Flash call on a 128x172 crop (canvas x 192..320), mask 64 px wide (canvas 224..288), 6 gens, seed 15221. The strip is pasted back.
+    - A small mismatch remains at x≈224, but it reads as a panel joint.
+    - A full 256-wide seam crop was 16k base64 even at 8 colours; deck texture is noisy.
+  - The first inline upload of tile A arrived 1 char too long, "image data looks incomplete" (not billed); a resend worked.
+  - Result `assets/drafts/bg_15101_deck_v2.png` (deck edge at row ~132), 3x view `refs/deck_v2.png`. Tiles `deck_A_/deck_B_/deck_seam_proflash_*.png`.
 
 ## Wallpaper: "otherworld" (started 2026-10-07, **released 2026-10-08**) — `wallpapers/otherworld/`
 
@@ -204,6 +254,15 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
   - Gotchas:
     - **PowerShell 5 `Set-Content -Encoding UTF8` writes a BOM.** Harmless for the browser, but strip it: `sed -i '1s/^ï»¿//'`. Better, edit text files with python or the Edit tool.
     - **Headless shots of this scene come out all black at random** (about half the time). It doesn't depend on the URL, and a debug page shows no errors and a created canvas. Likely the heavy murk layers plus virtual-time scheduling. Retake, or check lit pixels with `png_index.read_png` before trusting a shot or a bundle thumbnail.
+- **Perf fix (2026-10-08, 0 gens).** User: "the particles look like they fly at 5 fps".
+  - Cause: not the particles but the fog. `renderMurk` ran three 4-octave fbm per pixel, 48 `sin()` per pixel. Three murk layers (≈300k px) at 12 updates/s took **334 ms per update, ~400% of a core**, so the whole page ran at a few fps.
+  - Fix in the engine:
+    - The noise is sampled on a coarse grid every `cell` px (new murk option, default 4) and interpolated bilinearly; only the Bayer dither stays per pixel.
+    - Each murk layer's second update gets a random delay, so the layers don't all recompute on the same frame.
+  - Result: **24 ms per update of all three, ~29% of a core**. The noise error vs exact is ≤0.08, and the fog looks the same (`refs/composite_perf.png`).
+  - Benchmark: a scratchpad page `murkbench.html` run with headless Edge `--dump-dom`, timed with `performance.now` in synchronous code. Virtual time isn't involved there. There's no node on this machine.
+  - Rule: any per-pixel procedural layer must be costed before shipping. Budget it against 33 ms per frame at 30 fps, and against CPU per second.
+  - Bundle rebuilt.
 
 ## Wallpaper: "rooftop-clash" (planned 2026-10-04, **released 2026-10-06** — see Status "Release")
 

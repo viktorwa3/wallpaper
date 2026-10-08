@@ -386,16 +386,29 @@
 
   // murk: drifting, churning dark fog. Domain-warped fbm → coverage → alpha, posterized into `levels` steps with
   // an ordered dither between them, so it stays crisp pixels in a single colour.
+  // The noise is sampled on a coarse grid every `cell` px (default 4) and interpolated bilinearly; only the dither
+  // runs per pixel. The fog is far larger than a cell, so it looks the same, at ~1/16 of the cost (per pixel, three
+  // 4-octave fbm calls = 48 sin(): three full-screen murk layers at 12 fps used to choke the page to a few fps).
   function renderMurk(l, t) {
     const { w, h } = l, px = l._data.data, [r, g, b] = hexToRgb(l.color ?? '#000000');
     const scale = l.scale ?? 40, [vx, vy] = l.drift ?? [3, -2], curl = (l.curl ?? 0.05) * t;
     const cover = l.cover ?? 0.5, soft = l.soft ?? 0.15, levels = l.levels ?? 4, maxA = l.density ?? 0.9;
     const ox = (l.x - vx * t) / scale, oy = (l.y - vy * t) / scale;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const u = x / scale + ox, v = y / scale + oy;
+    const c = l.cell ?? 4, gw = Math.ceil(w / c) + 1, gh = Math.ceil(h / c) + 1;
+    const grid = l._grid ?? (l._grid = new Float32Array(gw * gh));
+    for (let gy = 0; gy < gh; gy++) {
+      for (let gx = 0; gx < gw; gx++) {
+        const u = gx * c / scale + ox, v = gy * c / scale + oy;
         const wu = fbm(u * 0.7 + curl, v * 0.7 + 3.1), wv = fbm(u * 0.7 + 7.7, v * 0.7 - curl);
-        const n = fbm(u + wu * 1.6, v + wv * 1.6);
+        grid[gy * gw + gx] = fbm(u + wu * 1.6, v + wv * 1.6);
+      }
+    }
+    for (let y = 0; y < h; y++) {
+      const gy = Math.floor(y / c), fy = (y - gy * c) / c, row = gy * gw;
+      for (let x = 0; x < w; x++) {
+        const gx = Math.floor(x / c), fx = (x - gx * c) / c, k = row + gx;
+        const top = grid[k] + (grid[k + 1] - grid[k]) * fx, bot = grid[k + gw] + (grid[k + gw + 1] - grid[k + gw]) * fx;
+        const n = top + (bot - top) * fy;
         let a = Math.min(1, Math.max(0, (n - cover + soft) / (2 * soft)));
         a = a * a * (3 - 2 * a) * levels;
         const lo = Math.floor(a), q = (lo + (a - lo > BAYER4[(y & 3) * 4 + (x & 3)] ? 1 : 0)) / levels;
@@ -659,7 +672,9 @@
         l._next = -1;
       }
       if (t >= l._next) {
-        l._next = t + 1 / (l.fps ?? 10);
+        // The first redraw after the initial one gets a random delay, so several murk layers recompute on
+        // different frames instead of all stalling the same one.
+        l._next = t + (l._next < 0 ? 1 + Math.random() : 1) / (l.fps ?? 10);
         renderMurk(l, t);
       }
       ctx.drawImage(l._buf, l.x, l.y);
