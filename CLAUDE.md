@@ -177,6 +177,25 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
     - 15303: a wide industrial wall of pipes, orange glow behind it, the cog right, the figure; the deck at ~78%.
     - 15304: the most monumental. A huge cog top-right over a dark rack shaft, a lit girder wall, the figure with a long shadow; the deck at ~75%.
   - Again none puts the deck edge at 45%.
+- **Round 5: corner view (2026-10-08, 4 gens).** User: "not quite. A giant platform descending into the shaft; the cog turns, controlling the lift; the view from one corner toward the opposite one; the slab runs past the frame edges; black at the top."
+  - Sheet: `refs/bg_round5.png`.
+  - Prompts:
+    - 15401/15402 use `view: high top-down`: "seen from one corner of a gigantic square freight elevator platform, looking diagonally across its huge steel deck toward the opposite far corner … runs beyond the left, right and bottom edges … two far edges … meet at the far corner … like a wide V … cog at that far corner meshes with a vertical toothed rack rail … top 40% pitch black … one tiny human figure".
+    - 15403/15404 have no view and use similar wording ("bottomless dark shaft … far edges form a diagonal V").
+  - **`high top-down` + "from one corner … toward the opposite far corner" gives a true isometric corner view.** The earlier side views never did.
+  - Results:
+    - 15401: a huge cog standing on the deck, near the left; the walls meet at a far corner with a rack, plus a tiny figure. But the cog isn't in the corner, and the deck edges aren't visible.
+    - **15402**: the best match. An isometric deck from the near corner, running past the left, bottom and right edges, with a tiny figure in the middle. The far corner where the two shaft walls meet holds the rusted cog against the right wall and its rack. A thin orange-lit gap along the right deck edge, two vertical racks/ladders on the walls. No black top: the walls reach the top edge, so the blackness needs a procedural fade.
+    - 15403: the camera is outside the platform, looking at its corner from below over a truss. Inverted; wrong.
+    - 15404: a deck with a diagonal stair and a truss under it, the cog top-left. Busy and unclear.
+- **Round 6: lower camera (2026-10-08, 4 gens).** User: "I want the view a bit more from below."
+  - All four use `view: low top-down`. Sheet: `refs/bg_round6.png`.
+  - Prompts: 15501/15502 reuse the round-5 prompt. 15503/15504 add "low camera at the eye height of a person standing at the near corner … deck seen at a shallow angle … cog towers over the deck".
+  - Results:
+    - 15501: the camera is outside the platform again, seeing its corner and underside; the cog sits on a rail.
+    - 15502: still high-ish. The cog sits on the left wall with a rack running across the deck; the far corner on the right has a railing and an orange gap.
+    - 15503: low and dramatic, with a huge cog behind the far corner. But the whole platform fits in the frame with railings, so it reads as small.
+    - **15504**: the lowest and most monumental. From the near corner, the deck runs past the left and bottom edges, with an orange-lit edge on the left. A gigantic cog (~8x the figure's height) stands in the far corner against the riveted shaft walls, with a vertical rack. The figure casts a long shadow. The walls still reach the top: needs a procedural black fade.
 
 ## Wallpaper: "otherworld" (started 2026-10-07, **released 2026-10-08**) — `wallpapers/otherworld/`
 
