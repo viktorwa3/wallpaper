@@ -166,6 +166,17 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
     - A full 256-wide seam crop was 16k base64 even at 8 colours; deck texture is noisy.
   - The first inline upload of tile A arrived 1 char too long, "image data looks incomplete" (not billed); a resend worked.
   - Result `assets/drafts/bg_15101_deck_v2.png` (deck edge at row ~132), 3x view `refs/deck_v2.png`. Tiles `deck_A_/deck_B_/deck_seam_proflash_*.png`.
+- **Round 4: scale (2026-10-08, 4 gens).** User: "the lift lacks gigantism, try generating again with…" (the message was cut off). Read as: add scale cues.
+  - Pixen 512x288 `highly detailed`, sheet `refs/bg_round4.png`.
+  - 15301/15302 use `view: side` with "colossal scale … platform as big as a city square … hundreds of tiny rivets, rows of girders and thin catwalks shrinking upward … cog taller than ten people … **one tiny lone human silhouette on the deck for scale**".
+  - 15303/15304 have no view and use "low camera on the deck looking slightly up … colossal cliff of steel plating … cog bigger than a house … a single tiny human figure".
+  - **The tiny human is the scale cue that works.** All four now read as huge; 15101 read as a room with a crate.
+  - Results:
+    - 15301: tall hall, the cog top-right on a rack, the figure on a deck at ~85%. Feels like a box.
+    - **15302**: closest to the sketch. A flat riveted wall with catwalks, the cog top-right with a rack, the deck edge at ~63%, the corner at the right with an orange-lit gap, a tiny figure. Side walls on the left.
+    - 15303: a wide industrial wall of pipes, orange glow behind it, the cog right, the figure; the deck at ~78%.
+    - 15304: the most monumental. A huge cog top-right over a dark rack shaft, a lit girder wall, the figure with a long shadow; the deck at ~75%.
+  - Again none puts the deck edge at 45%.
 
 ## Wallpaper: "otherworld" (started 2026-10-07, **released 2026-10-08**) — `wallpapers/otherworld/`
 
