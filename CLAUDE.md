@@ -47,7 +47,7 @@ wallpapers/<name>/
 scripts/                        # git-sync.ps1, mcp-headers.ps1, screenshot.ps1, despeckle.ps1, contact-sheet.ps1 (tile candidates at 3x for comparison), sprite-sheet.ps1 (frames → 1-row sheet), fg-cutout.ps1 (bg minus sky → bg_fg.png), hole-mask.ps1 (layer mask from dark openings in bg), strip-grey.ps1 (remove baked-in smoke from a fire sheet), bundle.ps1 (Lively folder + zip), sky-mask.py (sky mask + glowing band layer from a bg), png_index.py / snap.py / finish.py (python+zlib PNG helpers: indexed re-encode for inline MCP uploads, palette snap after downscaling, row cut + speck removal)
 ```
 
-Current wallpapers: `burning-city-grin` (ruined-city was merged into it); `rooftop-clash` (released, see its section); `otherworld` in progress (see its section). Scene is `scene.js` (not JSON) so pages work from `file://` without a server — `fetch` of local JSON is blocked there. Asset paths in scene.js are relative to the wallpaper's index.html (shared art = `../../shared/<kind>/<name>/...`). Missing images render as magenta rects, so scenes can reference assets before they exist; `rect` layers are explicit placeholders.
+Current wallpapers: `burning-city-grin` (ruined-city was merged into it); `rooftop-clash` (released, see its section); `otherworld` (released 2026-10-08, see its section). Scene is `scene.js` (not JSON) so pages work from `file://` without a server — `fetch` of local JSON is blocked there. Asset paths in scene.js are relative to the wallpaper's index.html (shared art = `../../shared/<kind>/<name>/...`). Missing images render as magenta rects, so scenes can reference assets before they exist; `rect` layers are explicit placeholders.
 Engine: integer scale = floor(min(screenW/512, screenH/288)), letterboxed (1080p → x3); frame cap `maxFps` (default 30); `?grid` URL flag draws a 16px grid + layer outlines.
 **Verify visually** with `scripts/screenshot.ps1 <name> [out.png] [-Grid]` (headless Edge, 2560x1440), then Read the PNG. The script waits for Edge (Start-Process -Wait); an all-black PNG means the page didn't render. `-Query "head=264&lift=40"` passes URL params for scene variants, `-Dist` renders the bundle in dist/.
 Lively imports one folder: `scripts/bundle.ps1 <name>` flattens the `../../` paths into `dist/<name>/` + a zip to drop into Lively. It copies all of `shared/` except `drafts/`, `refs/`, `frames/` (structure kept), and the wallpaper's `assets/` minus `drafts/` and `frames/` — **scenes must reference only finals at the top level of `assets/`** (promote a chosen draft by copying it there under a plain name), so scene variants that point into shared drafts (e.g. `?head=224`) work only from the repo.
@@ -68,6 +68,10 @@ Account: PixelLab **Tier 1 active** (2000 gens, resets 2026-11-02).
   - Breathing: PixMiniMax on the rotation URL, first = last frame, 8 frames (1 gen each) → `assets/drafts/{suit,mage}_breath_48x8.png`, `shared/characters/demon/demon_breath_64x7.png` (frame 6 dropped: dark blotches). fps 5–6.
   - scene.js: `stand(c, x, ground)` puts the soles (sprite's lowest opaque row `feet`) on a ground row; mage x 104 / ground 252 (a step behind), suit 148 / 258, demon 318 / 258. Size approved by the user. Contact shadows = engine `shadow` layer (flat pixel ellipse, #05070d alpha 0.6, ry 2, centred on each sprite's `feetX`; per-character `shadowDy`/`shadowRy` — the demon's wide 3/4 stance has the rear foot ~5px higher, so its shadow is taller (ry 3) and raised 3px, otherwise the rear foot floats). Demon eyes = two yellow `glow` layers (#ffc21a, lighter, pulse 0.4Hz): near eye at sprite (26,16) r 7, the far eye hidden by the 3/4 profile gets a weak r 4 glow at (22,16). Character ids: suit 8185d519…, mage 639bdc13…, demon 7e22632d… (more animations can be queued on them).
 - [x] **Release 2026-10-06** ("ready solution"): finals promoted out of drafts — rooftop-clash `assets/demon.png` (= drafts/demon_hq_196x208.png), `assets/grin.png` (= drafts/grin_slash_c3_final_216x204.png); burning-city-grin `assets/suit_breath_48x8.png`, `assets/mage_breath_48x8.png`. `bundle.ps1` now drops `assets/drafts/` too → zips 4 MB → **rooftop-clash 925 KB, burning-city-grin 582 KB**. Both `dist/` bundles verified rendering (no magenta = no missing asset). Install: Lively → "+" (Add wallpaper) → pick `dist/<name>.zip`, or drag the zip onto the Lively window.
+- [x] **otherworld release 2026-10-08**:
+  - The default variant is now **14103 dark** (round 3); `?bg=main` gives the old 14003-rot7 scene.
+  - Bundle: `scripts/bundle.ps1 otherworld -Title "Otherworld" -Desc …` → `dist/otherworld.zip` (~925 KB). Preview verified rendering.
+  - CPU note: three full-res `murk` layers (fog, cloud light, fog over the glow) are recomputed at 12 fps. If Lively shows high CPU, lower their `fps` first.
 - [x] Lively bundle script (2026-10-03): `scripts/bundle.ps1 burning-city-grin [-Title] [-Desc]` → `dist/<name>/` + `dist/<name>.zip` (gitignored). Copies engine + shared PNGs + the wallpaper's assets (minus `frames/`), rewrites `../../` paths, writes `LivelyInfo.json` (Type 1 = web), renders the bundle itself for `thumbnail.png` (480x270) / `preview.png`, and regenerates `dist/preview.html` (all bundles live in iframes + full-screen / zip links). Check a bundle with `screenshot.ps1 <name> -Dist`. Gotcha: read/write text as explicit UTF-8 — PowerShell 5 `Get-Content` reads ANSI and mangled scene.js → black page.
 - [x] head size (2026-10-02): user wanted the head **bigger**; eyes may be sacrificed to the veil. Upscaled redraws of 7302 (look preserved): `head4_pixen_224x140/264x164/320x200` via `edit_image_pixen` with larger width/height (1 gen each — it re-renders, not rescales; output area <= 256x256) and `head4_pro_256x160` via `create_image_pro` with 7302 as reference (20 gens, 1 candidate, cleaner). scene.js picks via `?head=168|224|264|pro256|320` (default 320); geometry table (bbox, eyes, eye rows) drives head position and eye glow. Comparison: `shared/characters/grin/refs/heads_compare.png`. Head drafts now in `shared/characters/grin/drafts/`. History: base head2 seed7202_c3, eyes edit 7302 = favourite.
 - [x] eye glow: two `glow` layers (r 9, #ff2a1a, alpha 0.75, lighter, pulse 0.5Hz) at z 13, above the head.
@@ -113,7 +117,7 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
   - **Final decision (user, 2026-10-06): only `portrait_256.png` is kept** ("the others are pretty ugly"). `portrait_128`, `portrait_ink_168`, their source drafts and `refs/portrait_finals.png` were deleted. The folder now holds `portrait_256.png` + `drafts/portrait_pixen_256_seed13002.png`. Takeaway: the untouched pixen 256 beat every hand- or inpaint-fixed variant. For this kind of portrait, pick the cleanest raw generation rather than repairing a weaker one.
   - Lessons: check small glowing eyes at zoom — Pro likes heart/odd-shaped pupils; "dead clouded eye" from the inspiration was not wanted (user: the eye isn't blind / isn't torn out) → for this character keep the human-side eye alive. PowerShell variables are case-insensitive (`$P` = `$p`) — never reuse a name differing only in case. When repainting a feature, recolour inside the existing shading instead of filling a new shape: a filled ellipse always shows up as a ring or a patch.
 
-## Wallpaper: "otherworld" (started 2026-10-07, in progress) — `wallpapers/otherworld/`
+## Wallpaper: "otherworld" (started 2026-10-07, **released 2026-10-08**) — `wallpapers/otherworld/`
 
 **Brief (user):** a horror-game-style "other world" shift (inspired by a well-known survival-horror town — **never name the franchise in prompts**). First-person view from the street looking up; mid-rise blocks (5–6 storeys) towering up; rust and dark red stains; a black sky cut by one murky dull-orange band that looks like a river; particles peeling off the walls as the town shifts into the other world.
 - Round 1 (4 gens): Pixen 512x288, `highly detailed`. Prompt A (14001/14002): "first-person worm's-eye view, standing in a narrow street and looking steeply up between old mid-rise apartment buildings … lean inward, converging toward the top centre … thick rust, peeling flaking paint, corroded metal grating, dark red stains dripping down from the windows … pitch black sky cut through by one murky dull orange band that winds across the sky like a river". Prompt B (14003/14004): "view from the ground looking straight up … facades rise from all four edges toward a central opening of sky". Results:
@@ -164,6 +168,42 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
   - Peel walls: the left block, the right block and the small middle blocks.
   - Render: `refs/composite_14103.png`.
   - Lively bundles only the default variant. To ship 14103, make it `main`.
+- **14103 dark (2026-10-08, 0 gens).** User: "make 14103 darker; the orange clouds should shine through the darkness, maybe animated". Variant option `dark` (14103 only) adds three layers:
+  - `dimScene`: a full-canvas rect, #070405 at alpha 0.42, over everything.
+  - `dimSky`: a rect, #030102 at alpha 0.82, masked to the sky. It sinks the clouds almost into black.
+  - **`emberLight`** (z 1.5): a `murk` layer in **orange** (#e8782a), drawn `lighter` and **masked by band_14103.png** (the cloud pixels). Bright patches drift (3,-5 px/s) and churn inside the cloud shapes, so the clouds glow from within like fire behind smoke (cover 0.48, soft 0.32, density 0.95).
+
+  Lowered the flat band light to 0.1, halos to 0.22 and bandThrough to 0.12, so the moving patches carry the light. The black `murk` still drifts on top.
+  - Trick: `murk` with a light colour plus `blend: 'lighter'` plus `mask` = light moving inside a shape.
+  - `rect` with `label: ''` = a plain overlay without the id text.
+
+  Render `refs/composite_14103_dark.png`. The first headless shot came out all black with no console errors; the retake was fine.
+- **14103 dark round 2 (2026-10-08, 0 gens).** User: "darker haze, more cloud glow, black and dark-orange particles (imitate rust)". Changes in `dark`:
+  - **Haze:** black `murk` cover 0.43 → 0.34, soft 0.24, density 1.
+  - **Glow:**
+    - `emberLight` moved **above the haze** (`lightZ` 3.5), so the light shines through it instead of being hidden.
+    - cover 0.52, density 0.8; band 0.16; halos 0.3.
+    - At cover 0.4 / density 1 the glow flooded the clouds into a flat bright orange and the patches were lost. Keep cover around 0.5 so it stays patchy.
+  - **Particles = rust:**
+    - peel flakes #0e0a09 / #1a100c / #4a2412 / #6a3416 / #5a2a14, underside #0a0706, edge #8a4a1e;
+    - rise motes black to #56280f;
+    - embers dark orange #b8561e / #9a4416 / #c8662a / #7a3210, 30% of motes.
+  - The scene spreads these per-variant overrides into the layers (`...D?.murk`, `...D?.flakes`, `...D?.motes`).
+  - Render `refs/composite_14103_dark2.png`. One headless shot came out black again; the retake was fine.
+- **14103 dark round 3 (2026-10-08, 0 gens).** User: "more black haze, there's less of it now".
+  - Cause: once `emberLight` sat above the first fog, the clouds read as clean orange.
+  - Fix: a second black fog, `murkOver`, at z 3.8 **above the glow**.
+    - Full width, scale 30, drift (6,-3); a different scale and drift from the first fog, so the two don't mirror each other.
+    - cover 0.46, soft 0.22, density 0.92, masked to the sky.
+  - Stack, bottom to top: dimmed bg → black fog → orange light inside the clouds → black fog.
+  - Result: dark wisps cross the glowing clouds and the glow breaks through in patches.
+  - Render `refs/composite_14103_dark3.png`.
+- **Release (2026-10-08).** User: "pack 14103 as it is now".
+  - `scene.js` defaults to `V[14103]`.
+  - Bundle `dist/otherworld.zip`.
+  - Gotchas:
+    - **PowerShell 5 `Set-Content -Encoding UTF8` writes a BOM.** Harmless for the browser, but strip it: `sed -i '1s/^ï»¿//'`. Better, edit text files with python or the Edit tool.
+    - **Headless shots of this scene come out all black at random** (about half the time). It doesn't depend on the URL, and a debug page shows no errors and a created canvas. Likely the heavy murk layers plus virtual-time scheduling. Retake, or check lit pixels with `png_index.read_png` before trusting a shot or a bundle thumbnail.
 
 ## Wallpaper: "rooftop-clash" (planned 2026-10-04, **released 2026-10-06** — see Status "Release")
 

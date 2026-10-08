@@ -4,8 +4,9 @@
 // ash, flakes and embers float up everywhere — the moment the town shifts into the other world.
 (() => {
   // Two finished backgrounds, each with its own sky mask + band layer (scripts/sky-mask.py) and effect geometry:
-  //   default = seed 14003 rotated 7° clockwise (nearest, zoom 1.21) = assets/bg.png;
-  //   ?bg=14103 = the cartoon-cloud variant (Pixen "dutch angle" seed 14103, unrotated) = assets/bg_14103.png.
+  //   default (released 2026-10-08) = the cartoon-cloud variant, dark take (Pixen "dutch angle" seed 14103, unrotated)
+  //     = assets/bg_14103.png;
+  //   ?bg=main = seed 14003 rotated 7° clockwise (nearest, zoom 1.21) = assets/bg.png.
   const V = {
     main: {
       bg: 'assets/bg.png', sky: 'assets/sky_mask.png', band: 'assets/band.png',
@@ -21,11 +22,21 @@
       seeps: [[280, 90, 50], [370, 60, 44], [340, 210, 44]],
       murk: [172, 278], walls: [[0, 30, 180, 258], [400, 0, 112, 288], [190, 150, 110, 138]], vanish: [330, -30],
       bandAlpha: 0.55,   // the clouds are big solid shapes: at 0.9 they blow out to yellow
+      // Darker take (user): the whole scene dimmed, the clouds sunk almost into black, and light wandering inside
+      // them (`emberLight`) so they glow through the darkness instead of sitting on it.
+      dark: { scene: 0.42, sky: 0.82, band: 0.16, light: 1, halo: 0.3, through: 0.12,
+        // Round 2 (user): thicker black haze, stronger cloud glow, flakes/motes in black + dark rust orange.
+        murk: { cover: 0.34, soft: 0.24, density: 1 },
+        // Round 3 (user: "more black haze, there's less of it now"): a second black fog above the cloud glow.
+        murkOver: { cover: 0.46, soft: 0.22, density: 0.92 }, lightCover: 0.52, lightDensity: 0.8, lightZ: 3.5,
+        flakes: { colors: ['#0e0a09', '#1a100c', '#4a2412', '#6a3416', '#5a2a14'], back: '#0a0706', edge: '#8a4a1e', ash: '#1a0f0b' },
+        motes: { colors: ['#0a0807', '#140e0c', '#3a1a0e', '#56280f'], edge: '#6a3416', emberChance: 0.3,
+          embers: ['#b8561e', '#9a4416', '#c8662a', '#7a3210'] } },
       paint: ['#b1b597', '#9a9c82', '#727165', '#7a3a22', '#a05a26'],
     },
   };
-  const v = V[new URLSearchParams(location.search).get('bg')] ?? V.main;
-  const SKY = v.sky;
+  const v = V[new URLSearchParams(location.search).get('bg')] ?? V[14103];
+  const SKY = v.sky, D = v.dark;
 
   window.SCENE = {
     canvas: { width: 512, height: 288 },
@@ -33,19 +44,34 @@
     layers: [
       { id: 'bg', type: 'image', src: v.bg, x: 0, y: 0, z: 0 },
 
+      // Dark variants: dim everything, then sink the sky (clouds included) almost into black.
+      ...(D ? [
+        { id: 'dimScene', type: 'rect', x: 0, y: 0, w: 512, h: 288, color: '#070405', label: '', alpha: D.scene, z: 0.5 },
+        { id: 'dimSky', type: 'rect', x: 0, y: 0, w: 512, h: 288, color: '#030102', label: '', alpha: D.sky, mask: SKY, z: 0.6 },
+        // Light moving inside the clouds: an orange fog drawn additively and clipped to the cloud pixels (band.png),
+        // so bright patches drift and swell through the cloud shapes like fire behind smoke.
+        { id: 'emberLight', type: 'murk', x: v.murk[0], y: 0, w: v.murk[1], h: 288, color: '#e8782a', scale: 34,
+          drift: [3, -5], curl: 0.07, cover: D.lightCover ?? 0.48, soft: 0.3, density: D.lightDensity ?? D.light, levels: 5, fps: 12,
+          // lightZ above the black murk = the glow shows through the haze instead of being hidden by it.
+          blend: 'lighter', mask: v.band, z: D.lightZ ?? 1.5 },
+      ] : []),
       // The band itself lights up (its orange pixels, brightened, added on top) with a slow breathing pulse.
-      { id: 'band', type: 'image', src: v.band, x: 0, y: 0, blend: 'lighter', alpha: v.bandAlpha ?? 0.9,
+      { id: 'band', type: 'image', src: v.band, x: 0, y: 0, blend: 'lighter', alpha: D?.band ?? v.bandAlpha ?? 0.9,
         pulse: { amp: 0.5, hz: 0.09 }, z: 1 },
       // Light bleeding out of the band into the sky, under the fog.
       ...v.halos.map(([x, y, r], i) => ({
-        id: 'halo' + i, type: 'glow', x, y, r, color: '#d8802e', alpha: 0.4, flicker: 0.5, hz: 0.11, phase: i * 1.3,
+        id: 'halo' + i, type: 'glow', x, y, r, color: '#d8802e', alpha: D?.halo ?? 0.4, flicker: 0.5, hz: 0.11, phase: i * 1.3,
         blend: 'lighter', mask: SKY, z: 2,
       })),
       // Black fog drifting across the sky (up and to the right, along the band), thick in places, torn in others.
       { id: 'murk', type: 'murk', x: v.murk[0], y: 0, w: v.murk[1], h: 288, color: '#030203', scale: 46, drift: [4, -6], curl: 0.04,
-        cover: 0.43, soft: 0.2, density: 0.96, levels: 5, fps: 12, mask: SKY, z: 3 },
+        cover: 0.43, soft: 0.2, density: 0.96, ...D?.murk, levels: 5, fps: 12, mask: SKY, z: 3 },
+      // Dark variants: black wisps drifting over the glowing clouds too (the glow sits above the first fog layer,
+      // so without this the clouds read as clean orange): different scale + drift, so it doesn't mirror the first.
+      ...(D?.murkOver ? [{ id: 'murkOver', type: 'murk', x: 0, y: 0, w: 512, h: 288, color: '#030203', scale: 30,
+        drift: [6, -3], curl: 0.06, soft: 0.2, levels: 5, fps: 12, ...D.murkOver, mask: SKY, z: 3.8 }] : []),
       // The band shining through the fog: the same brightened band pixels again, weaker, on top of the murk.
-      { id: 'bandThrough', type: 'image', src: v.band, x: 0, y: 0, blend: 'lighter', alpha: 0.4,
+      { id: 'bandThrough', type: 'image', src: v.band, x: 0, y: 0, blend: 'lighter', alpha: D?.through ?? 0.4,
         pulse: { amp: 0.5, hz: 0.09 }, z: 4 },
       // A faint glow on top of the fog: light diffusing through it where the band runs underneath.
       ...v.seeps.map(([x, y, r], i) => ({
@@ -56,11 +82,11 @@
       // Wall flakes tearing off both blocks and drifting up toward the top of the band.
       { id: 'peel', type: 'peel', areas: v.walls, rate: 10, prewarm: 10,
         size: [3, 6], cling: [0.5, 1.5], life: [7, 12], speed: [9, 18], vanish: v.vanish, sway: 7,
-        colors: v.paint, back: '#2a1712', edge: '#d08a3c', under: '#140a08', ash: '#2a1c18', z: 10 },
+        colors: v.paint, back: '#2a1712', edge: '#d08a3c', under: '#140a08', ash: '#2a1c18', ...D?.flakes, z: 10 },
       // The otherworld motes: dark ash flakes and a few smouldering embers rising slowly over the whole frame.
       { id: 'rise', type: 'rise', count: 110, speed: [5, 14], life: [5, 11], size: [1, 3], sway: 5,
         colors: ['#1a1210', '#2a1c18', '#3a2822', '#4a3a34'], edge: '#7a4a32',
-        emberChance: 0.22, embers: ['#ff9a3c', '#e8642a', '#ffc070', '#c8401e'], z: 11 },
+        emberChance: 0.22, embers: ['#ff9a3c', '#e8642a', '#ffc070', '#c8401e'], ...D?.motes, z: 11 },
 
       { id: 'vignette', type: 'vignette', color: '#050203', alpha: 0.55, inner: 0.55, z: 40 },
     ],
