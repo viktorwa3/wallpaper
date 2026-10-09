@@ -47,7 +47,7 @@ wallpapers/<name>/
 scripts/                        # git-sync.ps1, mcp-headers.ps1, screenshot.ps1, despeckle.ps1, contact-sheet.ps1 (tile candidates at 3x for comparison), sprite-sheet.ps1 (frames → 1-row sheet), fg-cutout.ps1 (bg minus sky → bg_fg.png), hole-mask.ps1 (layer mask from dark openings in bg), strip-grey.ps1 (remove baked-in smoke from a fire sheet), bundle.ps1 (Lively folder + zip), sky-mask.py (sky mask + glowing band layer from a bg), png_index.py / snap.py / finish.py (python+zlib PNG helpers: indexed re-encode for inline MCP uploads, palette snap after downscaling, row cut + speck removal)
 ```
 
-Current wallpapers: `burning-city-grin` (ruined-city was merged into it); `rooftop-clash` (released, see its section); `otherworld` (released 2026-10-08, see its section); `descent` in progress (see its section). Scene is `scene.js` (not JSON) so pages work from `file://` without a server — `fetch` of local JSON is blocked there. Asset paths in scene.js are relative to the wallpaper's index.html (shared art = `../../shared/<kind>/<name>/...`). Missing images render as magenta rects, so scenes can reference assets before they exist; `rect` layers are explicit placeholders.
+Current wallpapers: `burning-city-grin` (ruined-city was merged into it); `rooftop-clash` (released, see its section); `otherworld` (released 2026-10-08, see its section); `descent` (released 2026-10-09, see its section). Scene is `scene.js` (not JSON) so pages work from `file://` without a server — `fetch` of local JSON is blocked there. Asset paths in scene.js are relative to the wallpaper's index.html (shared art = `../../shared/<kind>/<name>/...`). Missing images render as magenta rects, so scenes can reference assets before they exist; `rect` layers are explicit placeholders.
 Engine: integer scale = floor(min(screenW/512, screenH/288)), letterboxed (1080p → x3); frame cap `maxFps` (default 30); `?grid` URL flag draws a 16px grid + layer outlines.
 **Verify visually** with `scripts/screenshot.ps1 <name> [out.png] [-Grid]` (headless Edge, 2560x1440), then Read the PNG. The script waits for Edge (Start-Process -Wait); an all-black PNG means the page didn't render. `-Query "head=264&lift=40"` passes URL params for scene variants, `-Dist` renders the bundle in dist/.
 Lively imports one folder: `scripts/bundle.ps1 <name>` flattens the `../../` paths into `dist/<name>/` + a zip to drop into Lively. It copies all of `shared/` except `drafts/`, `refs/`, `frames/` (structure kept), and the wallpaper's `assets/` minus `drafts/` and `frames/` — **scenes must reference only finals at the top level of `assets/`** (promote a chosen draft by copying it there under a plain name), so scene variants that point into shared drafts (e.g. `?head=224`) work only from the repo.
@@ -72,6 +72,7 @@ Account: PixelLab **Tier 1 active** (2000 gens, resets 2026-11-02).
   - The default variant is now **14103 dark** (round 3); `?bg=main` gives the old 14003-rot7 scene.
   - Bundle: `scripts/bundle.ps1 otherworld -Title "Otherworld" -Desc …` → `dist/otherworld.zip` (~925 KB). Preview verified rendering.
   - CPU note: three full-res `murk` layers (fog, cloud light, fog over the glow) are recomputed at 12 fps. If Lively shows high CPU, lower their `fps` first.
+- [x] **descent release 2026-10-09** (user: "pack it, this is exactly it"): `scripts/bundle.ps1 descent -Title "Descent" -Desc …` → `dist/descent.zip` (~1.05 MB). The preview was verified rendering on the 2nd try; the first headless shot was black.
 - [x] Lively bundle script (2026-10-03): `scripts/bundle.ps1 burning-city-grin [-Title] [-Desc]` → `dist/<name>/` + `dist/<name>.zip` (gitignored). Copies engine + shared PNGs + the wallpaper's assets (minus `frames/`), rewrites `../../` paths, writes `LivelyInfo.json` (Type 1 = web), renders the bundle itself for `thumbnail.png` (480x270) / `preview.png`, and regenerates `dist/preview.html` (all bundles live in iframes + full-screen / zip links). Check a bundle with `screenshot.ps1 <name> -Dist`. Gotcha: read/write text as explicit UTF-8 — PowerShell 5 `Get-Content` reads ANSI and mangled scene.js → black page.
 - [x] head size (2026-10-02): user wanted the head **bigger**; eyes may be sacrificed to the veil. Upscaled redraws of 7302 (look preserved): `head4_pixen_224x140/264x164/320x200` via `edit_image_pixen` with larger width/height (1 gen each — it re-renders, not rescales; output area <= 256x256) and `head4_pro_256x160` via `create_image_pro` with 7302 as reference (20 gens, 1 candidate, cleaner). scene.js picks via `?head=168|224|264|pro256|320` (default 320); geometry table (bbox, eyes, eye rows) drives head position and eye glow. Comparison: `shared/characters/grin/refs/heads_compare.png`. Head drafts now in `shared/characters/grin/drafts/`. History: base head2 seed7202_c3, eyes edit 7302 = favourite.
 - [x] eye glow: two `glow` layers (r 9, #ff2a1a, alpha 0.75, lighter, pulse 0.5Hz) at z 13, above the head.
@@ -117,7 +118,7 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
   - **Final decision (user, 2026-10-06): only `portrait_256.png` is kept** ("the others are pretty ugly"). `portrait_128`, `portrait_ink_168`, their source drafts and `refs/portrait_finals.png` were deleted. The folder now holds `portrait_256.png` + `drafts/portrait_pixen_256_seed13002.png`. Takeaway: the untouched pixen 256 beat every hand- or inpaint-fixed variant. For this kind of portrait, pick the cleanest raw generation rather than repairing a weaker one.
   - Lessons: check small glowing eyes at zoom — Pro likes heart/odd-shaped pupils; "dead clouded eye" from the inspiration was not wanted (user: the eye isn't blind / isn't torn out) → for this character keep the human-side eye alive. PowerShell variables are case-insensitive (`$P` = `$p`) — never reuse a name differing only in case. When repainting a feature, recolour inside the existing shading instead of filling a new shape: a filled ellipse always shows up as a ring or a patch.
 
-## Wallpaper: "descent" (started 2026-10-08, in progress) — `wallpapers/descent/`
+## Wallpaper: "descent" (started 2026-10-08, **released 2026-10-09**) — `wallpapers/descent/`
 
 **Brief (user):** same horror-town otherworld theme, a bit more densely animated.
 - A huge lift platform descending fast on gears.
@@ -196,6 +197,49 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
     - 15502: still high-ish. The cog sits on the left wall with a rack running across the deck; the far corner on the right has a railing and an orange gap.
     - 15503: low and dramatic, with a huge cog behind the far corner. But the whole platform fits in the frame with railings, so it reads as small.
     - **15504**: the lowest and most monumental. From the near corner, the deck runs past the left and bottom edges, with an orange-lit edge on the left. A gigantic cog (~8x the figure's height) stands in the far corner against the riveted shaft walls, with a vertical rack. The figure casts a long shadow. The walls still reach the top: needs a procedural black fade.
+- **Round 7: eye-level (2026-10-09, 4 gens).** User: "I like 15504, but I want the view more parallel to the platform, not from above."
+  - Sheet `refs/bg_round7.png`, with 15504 for reference.
+  - Prompts:
+    - 15601/15602 use `view: side`: "camera stands at deck level at the near corner … eye height of a person, looking straight ahead parallel to the deck surface toward the far corner … deck at a very shallow grazing angle, a wide flat band across the bottom 30% … gigantic cog many times taller than a person at the far corner … meshes with a vertical rack … walls fade into pitch black at the top … one tiny human figure".
+    - 15603/15604 have no view: "eye-level view across the deck … camera low, just above the deck surface, looking horizontally toward the far corner".
+  - Results:
+    - **15601**: the closest corner view at a low angle. The deck is a band seen from the near corner, with its far edge on a shallow diagonal and an orange rim. The cog stands in the far right corner, with a rack on the back wall; truss walls fade dark. But the deck's left edge and underside show, so the camera seems to sit off the platform. The figure is fairly large.
+    - 15602: low. A huge cog on the left wall over the deck edge, a rack ladder, a tiny figure; the deck is diagonal.
+    - **15603**: the most parallel and the most gigantic. Eye level, the deck a perspective band at the bottom, a half-sunk cog against the back wall, a tiny figure far away, a rack above the cog. But it is frontal, not a corner view.
+    - 15604: frontal and symmetric with a railing; the figure is close and large, so it reads small.
+- **Scene round 1 on 15603 (2026-10-09, 2 gens).** User: "let's try 15603, now add the effects I mentioned". `assets/bg.png` = 15603.
+  - **Layers split with python (0 gens):**
+    - `assets/deck.png`: the deck only. Cut along its back edge at row 199, the left edge line (157,198)→(23,288) and the right edge (483,198)→(512,215). Check: `refs/deck_mask_check.png`.
+    - `assets/wall_tile.png`: 512x38, the walls' own pixels. The side wall x<157 comes from rows 100..137 (one beam period); the back wall + rack x≥157 from rows 36..73 (two rack rungs, period 19).
+      - Rows 38..75 caught the old cog's top teeth at the seam, so the band was moved 2 px up.
+      - Per-row brightness normalization flattened the beams; dropped.
+    - `assets/top_fade.png`: black ordered-dithered out by row 96.
+    - `assets/cog.png`: a new cog, Pixen 256 `no_background`, seed **15702** (5 spokes, rust drips; 15701 = 4 spokes, cleaner). The baked cog couldn't be cut out because the rack shows between its spokes. The new cog replaces it: the scrolling wall covers the old one.
+  - **New engine layers:**
+    - `scroll`: endless vertical tile, `speed` px/s, positive = content moves up.
+    - `spin`: rotation about cx,cy, `speed` deg/s, angle snapped to `step` deg; takes `grade`.
+    - `sparks`: continuous stream with a cone, `gust` noise-driven spurts, gravity (negative = swept up), drag, 1px streaks cooling white → red.
+  - **Stack:**
+    1. wall `scroll` at 70 px/s (y 0..230);
+    2. top_fade;
+    3. cog `spin` at (328,196), speed = 70/118 rad/s ≈ 34°/s (rack speed / pitch radius), step 2°, grade multiply #8a6450 0.5 + a dark top gradient;
+    4. deck;
+    5. orange underglow `glow`;
+    6. 3 `sparks` emitters: cog top/rack 34/s, the left and right deck slots 18/s each, gravity -70 so they are swept up;
+    7. fast upward `particles` streaks (#2a1610 160 px/s, #6a3416 230 px/s);
+    8. a `rise` of black/rust motes at 45–110 px/s with 30% dark-orange embers;
+    9. vignette.
+  - Render `refs/composite_round1.png`. Motion has to be judged live.
+- **Scene round 2: light breaks (2026-10-09, 0 gens).** User: "already not bad; fix these 2 spots where the light breaks". Both were at the lower-left, where the deck meets the walls.
+  1. **The tile lost the bg's large-scale wall lighting**: the dark far-left corner and the warm furnace glow low on the pillar next to the deck.
+     - Fix: two static maps from the bg: `wall_shade.png` = blur(bg)/blur(tile) capped at 1, drawn `multiply`; `wall_light.png` = blur(bg) − blur(tile)·shade, drawn `lighter`. The tile is aligned to the scroll's t=0 offset.
+     - Box blur radius 6 (10 looked airbrushed). The cog circle is filled row-wise from its sides before blurring.
+     - The light rides with the platform while the texture slides under it, which is physically right.
+     - Ordered-dithering the maps per channel gave cyan/teal speckles; kept them smooth.
+  2. **The deck mask's left corner was wrong.** It grabbed the bottom of the lit pillar, which became a static orange block with a flat top while the wall scrolled above it.
+     - True geometry, measured on a 10x zoom with an 8px grid: the near corner is at **(160,208)**; the left edge runs to (0,285) (slope 0.48); the back edge rises from the corner to row 199 at x≈196.
+  - Before/after `refs/light_fix_compare.png`, render `refs/composite_round2.png`.
+  - Lesson: when splitting a bg into a static and a scrolling layer, measure the cut edges at zoom. Anything static that belongs to the moving part shows as a frozen chunk.
 
 ## Wallpaper: "otherworld" (started 2026-10-07, **released 2026-10-08**) — `wallpapers/otherworld/`
 

@@ -61,6 +61,14 @@
 //               motes floating up everywhere: each fades in somewhere in `area`, rises at `speed` px/s with a sway,
 //               and dissolves after `life` s. Flakes turn over (width swings, `edge` = lit rim); a share `emberChance`
 //               are 1px smouldering embers in `embers` colours (flickering, a dim cross around the bigger ones).
+//   scroll      { src, x, y, w, h, speed }  endless vertical scroll of a tile, `speed` px/s (positive = content moves
+//               up, e.g. a shaft wall passing a descending lift). Takes grade/tint like image.
+//   spin        { src, cx, cy, speed, step, angle }  image rotating about its centre placed at cx,cy, `speed` deg/s,
+//               angle snapped to `step` deg (nearest-neighbour, so a coarser step shimmers less). Takes grade.
+//   sparks      { x, y, rate, gust, angle, spread, speed: [min, max], life: [min, max], gravity, drag, wind: [x, y],
+//               jitter: [x, y], colors, prewarm }  continuous spark stream from x,y: a cone around `angle` deg
+//               (0 = right, -90 = up), gravity + drag, 1px streaks cooling through `colors` over their life;
+//               gust 0..1 = noise-driven swing of the rate (spurts). Use blend 'lighter'.
 //   vignette    { color, alpha, inner }                     darkens the frame edges (radial, transparent inside `inner` 0..1).
 //   particles   { count, color, speed, angle, length }      procedural rain
 // Common: id, z, alpha (0..1), blend (canvas globalCompositeOperation, e.g. "lighter"),
@@ -428,7 +436,66 @@
       ember: Math.random() < (l.emberChance ?? 0) };
   }
 
+  // sparks simulation step: spawn at `rate`/s (gusting) at x,y, fly out in a cone, fall under gravity with drag.
+  function stepSparks(l, t, dt) {
+    const rnd = (lo, hi) => lo + Math.random() * (hi - lo);
+    const gust = 1 + (l.gust ?? 0) * (valueNoise(t * 1.7, 3.3) * 2 - 1);
+    l._acc = (l._acc ?? 0) + dt * (l.rate ?? 30) * Math.max(0, gust);
+    const base = (l.angle ?? -90) * Math.PI / 180, spread = (l.spread ?? 60) * Math.PI / 180;
+    while (l._acc >= 1) {
+      l._acc -= 1;
+      const a = base + (Math.random() - 0.5) * spread, v = rnd(...(l.speed ?? [40, 120]));
+      const [jx, jy] = l.jitter ?? [2, 1];
+      l._p.push({ x: l.x + rnd(-jx, jx), y: l.y + rnd(-jy, jy), vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+        age: 0, life: rnd(...(l.life ?? [0.3, 0.9])) });
+    }
+    const g = l.gravity ?? 160, drag = Math.exp(-(l.drag ?? 1.5) * dt), [wx, wy] = l.wind ?? [0, 0];
+    for (const p of l._p) {
+      p.px = p.x; p.py = p.y;
+      p.vx = p.vx * drag + wx * dt; p.vy = p.vy * drag + (g + wy) * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.age += dt;
+    }
+    l._p = l._p.filter(p => p.age < p.life);
+  }
+
   const draw = {
+    // Vertical endless scroll of a tile (e.g. a shaft wall seen from a descending lift): `speed` px/s, positive =
+    // content moves up. Drawn tiled over x,y,w,h (default the tile width / canvas height), whole-pixel offset.
+    scroll(l, t) {
+      if (!l._img) return drawRect(l, '#f0f', l.id);
+      const img = l._faded ?? l._img, th = img.height, x = Math.round(l.x ?? 0), y0 = Math.round(l.y ?? 0);
+      const h = l.h ?? H - y0, off = Math.round(((t * (l.speed ?? 40)) % th + th) % th);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x, y0, l.w ?? img.width, h); ctx.clip();
+      for (let y = y0 - off; y < y0 + h; y += th) ctx.drawImage(img, x, y);
+      ctx.restore();
+    },
+    // Image rotating around its centre placed at cx,cy: `speed` deg/s (negative = counter-clockwise), angle snapped
+    // to `step` degrees so the nearest-neighbour rotation doesn't shimmer every frame.
+    spin(l, t) {
+      if (!l._img) return drawRect(l, '#f0f', l.id);
+      const img = l._faded ?? l._img, step = l.step ?? 1;
+      const deg = Math.round(((l.angle ?? 0) + t * (l.speed ?? 20)) / step) * step;
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.translate(Math.round(l.cx), Math.round(l.cy));
+      ctx.rotate(deg * Math.PI / 180);
+      ctx.drawImage(img, -Math.round(img.width / 2), -Math.round(img.height / 2));
+      ctx.restore();
+    },
+    sparks(l, t, dt) {
+      if (!l._p) {
+        l._p = [];
+        for (let i = 0; i < (l.prewarm ?? 0) * 30; i++) stepSparks(l, i / 30, 1 / 30);
+      }
+      stepSparks(l, t, dt);
+      const colors = l.colors ?? ['#fffbe6', '#ffdd69', '#fe8e63', '#d23b36', '#5a1a14'];
+      for (const p of l._p) {
+        ctx.fillStyle = colors[Math.min(colors.length - 1, Math.floor(p.age / p.life * colors.length))];
+        const x0 = p.px ?? p.x, y0 = p.py ?? p.y, steps = Math.max(1, Math.round(Math.hypot(p.x - x0, p.y - y0)));
+        for (let s = 0; s <= steps; s++) ctx.fillRect(Math.round(x0 + (p.x - x0) * s / steps), Math.round(y0 + (p.y - y0) * s / steps), 1, 1);
+      }
+    },
     image(l) {
       if (!l._img) return drawRect(l, '#f0f', l.id);
       const x = Math.round(l.x ?? 0), y = Math.round(l.y ?? 0);
