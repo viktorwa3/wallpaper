@@ -69,10 +69,15 @@
 //               jitter: [x, y], colors, prewarm }  continuous spark stream from x,y: a cone around `angle` deg
 //               (0 = right, -90 = up), gravity + drag, 1px streaks cooling through `colors` over their life;
 //               gust 0..1 = noise-driven swing of the rate (spurts). Use blend 'lighter'.
+//   gauss       { from: [x, y], to: [x, y], r, width, arcs, reach, hz, seed, colors: { core, glow, arc, haze } }
+//               an electric slug's shot frozen mid-moment: optional jittering white/cyan beam from `from` to `to`, and
+//               at `to` a cyan haze, `arcs` crackling lightning bolts (re-rolled `hz` times/s, some forked, reaching
+//               r·(1..1+reach)) and a pulsing white core of radius ~r·0.35. Always drawn additively.
 //   vignette    { color, alpha, inner }                     darkens the frame edges (radial, transparent inside `inner` 0..1).
 //   particles   { count, color, speed, angle, length }      procedural rain
 // Common: id, z, alpha (0..1), blend (canvas globalCompositeOperation, e.g. "lighter"),
 //         pulse: { amp, hz, phase } — slow alpha swing (dims by up to amp of alpha; any layer, masked ones too),
+//         hover: { x, y, period, phase } — frozen-moment drift: eases out by (x, y) px and back, whole pixels;
 //         bob: { amp, period, phase } — slow vertical sway in whole pixels (layers with the same bob move together);
 //         clip: [[x, y, w, h], ...] canvas rects — the layer is drawn only inside their union;
 //         mask: canvas-sized PNG — the layer is drawn only where the mask is opaque (scripts/hole-mask.ps1 builds one
@@ -458,7 +463,63 @@
     l._p = l._p.filter(p => p.age < p.life);
   }
 
+  // 1px line in whole pixels (crisp at any angle).
+  function pxLine(x0, y0, x1, y1) {
+    const n = Math.max(1, Math.round(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))));
+    for (let i = 0; i <= n; i++) ctx.fillRect(Math.round(x0 + (x1 - x0) * i / n), Math.round(y0 + (y1 - y0) * i / n), 1, 1);
+  }
+  // Jagged lightning polyline from (x,y) heading `a` rad for `len` px in `segs` kinks; returns the end point.
+  function bolt(x, y, a, len, segs, rand, jag) {
+    let px = x, py = y;
+    for (let s = 1; s <= segs; s++) {
+      const d = len * s / segs, off = (rand() - 0.5) * jag * 2;
+      const nx = x + Math.cos(a) * d - Math.sin(a) * off, ny = y + Math.sin(a) * d + Math.cos(a) * off;
+      pxLine(px, py, nx, ny);
+      px = nx; py = ny;
+    }
+    return [px, py];
+  }
+
   const draw = {
+    // Gauss shot: an electric slug frozen in its moment — a jittering white-cyan beam from `from` (optional) to `to`,
+    // and at `to` a bright core inside a cyan haze with crackling lightning arcs re-rolled `hz` times a second.
+    gauss(l, t) {
+      const [tx, ty] = l.to, r = l.r ?? 8, hz = l.hz ?? 14, tick = Math.floor(t * hz);
+      let seed = tick * 977 + (l.seed ?? 1) * 131;
+      const rand = () => { seed = (seed * 16807) % 2147483647; return (seed & 0xffff) / 65536; };
+      const c = { core: '#ffffff', glow: '#bff4ff', arc: '#8fe2ff', haze: '#3a9fe8', ...l.colors };
+      const base = ctx.globalAlpha, fl = 0.8 + 0.2 * valueNoise(t * 9, l.seed ?? 1);
+      ctx.globalCompositeOperation = 'lighter';
+      if (l.from) {
+        const [fx, fy] = l.from, len = Math.hypot(tx - fx, ty - fy), ux = (tx - fx) / len, uy = (ty - fy) / len;
+        // Soft haze around the beam, then a 3px glow line, then the 1px white core, each slightly wobbling.
+        ctx.globalAlpha = base * 0.18 * fl; ctx.strokeStyle = c.haze; ctx.lineWidth = (l.width ?? 2) + 5;
+        ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(tx, ty); ctx.stroke();
+        const segs = Math.max(2, Math.round(len / 10)), pts = [[fx, fy]];
+        for (let s = 1; s < segs; s++) { const k = s / segs, o = (rand() - 0.5) * 1.6; pts.push([fx + (tx - fx) * k - uy * o, fy + (ty - fy) * k + ux * o]); }
+        pts.push([tx, ty]);
+        for (const [w, col, a] of [[1, c.glow, 0.55], [0, c.core, 0.95]]) {
+          ctx.globalAlpha = base * a * fl; ctx.fillStyle = col;
+          for (let s = 0; s < pts.length - 1; s++) for (let d = -w; d <= w; d++) pxLine(pts[s][0] - uy * d, pts[s][1] + ux * d, pts[s + 1][0] - uy * d, pts[s + 1][1] + ux * d);
+        }
+      }
+      // Impact: haze, crackling arcs, then a pulsing core disc.
+      const g = ctx.createRadialGradient(tx, ty, 0, tx, ty, r * 2.6);
+      g.addColorStop(0, c.haze); g.addColorStop(1, 'transparent');
+      ctx.globalAlpha = base * 0.45 * fl; ctx.fillStyle = g; ctx.fillRect(tx - r * 3, ty - r * 3, r * 6, r * 6);
+      ctx.fillStyle = c.arc;
+      for (let i = 0; i < (l.arcs ?? 7); i++) {
+        ctx.globalAlpha = base * (0.5 + 0.5 * rand());
+        const a = rand() * Math.PI * 2, len = r * (1 + rand() * (l.reach ?? 1.6));
+        const [ex, ey] = bolt(tx, ty, a, len, 4, rand, 2.2);
+        if (rand() < 0.4) bolt(ex, ey, a + (rand() - 0.5) * 1.6, len * 0.4, 2, rand, 1.5);   // fork
+      }
+      const cr = Math.max(1, Math.round(r * 0.35 * (0.85 + 0.3 * fl)));
+      ctx.globalAlpha = base * 0.7; ctx.fillStyle = c.glow;
+      for (let y = -cr - 1; y <= cr + 1; y++) for (let x = -cr - 1; x <= cr + 1; x++) if (x * x + y * y <= (cr + 1) * (cr + 1)) ctx.fillRect(tx + x, ty + y, 1, 1);
+      ctx.globalAlpha = base; ctx.fillStyle = c.core;
+      for (let y = -cr; y <= cr; y++) for (let x = -cr; x <= cr; x++) if (x * x + y * y <= cr * cr) ctx.fillRect(tx + x, ty + y, 1, 1);
+    },
     // Vertical endless scroll of a tile (e.g. a shaft wall seen from a descending lift): `speed` px/s, positive =
     // content moves up. Drawn tiled over x,y,w,h (default the tile width / canvas height), whole-pixel offset.
     scroll(l, t) {
@@ -855,6 +916,13 @@
     requestAnimationFrame(frame);
   }
 
+  // Hover: a frozen-moment drift — the layer eases out along (x, y) px and back over `period` s, in whole pixels.
+  // Give pieces flung out of a blast their own direction + phase so the whole spray seems to hang and breathe.
+  function hoverOffset(h, t) {
+    const k = 0.5 - 0.5 * Math.cos((t / (h.period ?? 4) + (h.phase ?? 0)) * Math.PI * 2);
+    return [Math.round((h.x ?? 0) * k), Math.round((h.y ?? 0) * k)];
+  }
+
   // Vertical sway in whole pixels (stays crisp): amp px, period s, phase 0..1. Layers sharing a bob move together.
   function bobOffset(b, t) {
     return Math.round((b.amp ?? 2) * Math.sin((t / (b.period ?? 6) + (b.phase ?? 0)) * Math.PI * 2));
@@ -878,6 +946,7 @@
       ctx.clip();
     }
     if (l.bob) ctx.translate(0, bobOffset(l.bob, t));
+    if (l.hover) { const [hx, hy] = hoverOffset(l.hover, t); ctx.translate(hx, hy); }
     draw[l.type ?? 'image'](l, t, dt);
     ctx.restore();
   }

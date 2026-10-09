@@ -47,7 +47,7 @@ wallpapers/<name>/
 scripts/                        # git-sync.ps1, mcp-headers.ps1, screenshot.ps1, despeckle.ps1, contact-sheet.ps1 (tile candidates at 3x for comparison), sprite-sheet.ps1 (frames → 1-row sheet), fg-cutout.ps1 (bg minus sky → bg_fg.png), hole-mask.ps1 (layer mask from dark openings in bg), strip-grey.ps1 (remove baked-in smoke from a fire sheet), bundle.ps1 (Lively folder + zip), sky-mask.py (sky mask + glowing band layer from a bg), png_index.py / snap.py / finish.py (python+zlib PNG helpers: indexed re-encode for inline MCP uploads, palette snap after downscaling, row cut + speck removal)
 ```
 
-Current wallpapers: `burning-city-grin` (ruined-city was merged into it); `rooftop-clash` (released, see its section); `otherworld` (released 2026-10-08, see its section); `descent` (released 2026-10-09, see its section). Scene is `scene.js` (not JSON) so pages work from `file://` without a server — `fetch` of local JSON is blocked there. Asset paths in scene.js are relative to the wallpaper's index.html (shared art = `../../shared/<kind>/<name>/...`). Missing images render as magenta rects, so scenes can reference assets before they exist; `rect` layers are explicit placeholders.
+Current wallpapers: `burning-city-grin` (ruined-city was merged into it); `rooftop-clash` (released, see its section); `otherworld` (released 2026-10-08, see its section); `descent` (released 2026-10-09, see its section); `point-blank` in progress (see its section). Scene is `scene.js` (not JSON) so pages work from `file://` without a server — `fetch` of local JSON is blocked there. Asset paths in scene.js are relative to the wallpaper's index.html (shared art = `../../shared/<kind>/<name>/...`). Missing images render as magenta rects, so scenes can reference assets before they exist; `rect` layers are explicit placeholders.
 Engine: integer scale = floor(min(screenW/512, screenH/288)), letterboxed (1080p → x3); frame cap `maxFps` (default 30); `?grid` URL flag draws a 16px grid + layer outlines.
 **Verify visually** with `scripts/screenshot.ps1 <name> [out.png] [-Grid]` (headless Edge, 2560x1440), then Read the PNG. The script waits for Edge (Start-Process -Wait); an all-black PNG means the page didn't render. `-Query "head=264&lift=40"` passes URL params for scene variants, `-Dist` renders the bundle in dist/.
 Lively imports one folder: `scripts/bundle.ps1 <name>` flattens the `../../` paths into `dist/<name>/` + a zip to drop into Lively. It copies all of `shared/` except `drafts/`, `refs/`, `frames/` (structure kept), and the wallpaper's `assets/` minus `drafts/` and `frames/` — **scenes must reference only finals at the top level of `assets/`** (promote a chosen draft by copying it there under a plain name), so scene variants that point into shared drafts (e.g. `?head=224`) work only from the repo.
@@ -117,6 +117,83 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
   - **Eye refactor (0 gens)**, user: "the eyes you added look creepy". The inpainted eyes were off-style (photoreal, white sclera) and the hand-painted round red eye too. Both portraits now get **hand-painted eyes from one almond template** (heavy dark upper lid, muted grey sclera, dark iris + 1 px highlight, lid shadow line; the red eye = same shape with a glowing #FC0103 iris and an #FF6A3C/#FFC8A8 hot core) painted onto the untouched source drafts (scratchpad `paint_eyes.ps1` + a JSON spec per portrait). Socket handling, after several failed tries: a repainted gradient socket showed concentric "target" rings, a flat skin ellipse read as a light goggle. What worked: **keep the model's own socket**. For the 128, only its maroon "torn-out hole" tones are recoloured into dark grey shadow tones; for the ink, nothing around the eye is touched. On the red side, black vein pixels are kept and the old red pupil is cleared first.
   - **Final decision (user, 2026-10-06): only `portrait_256.png` is kept** ("the others are pretty ugly"). `portrait_128`, `portrait_ink_168`, their source drafts and `refs/portrait_finals.png` were deleted. The folder now holds `portrait_256.png` + `drafts/portrait_pixen_256_seed13002.png`. Takeaway: the untouched pixen 256 beat every hand- or inpaint-fixed variant. For this kind of portrait, pick the cleanest raw generation rather than repairing a weaker one.
   - Lessons: check small glowing eyes at zoom — Pro likes heart/odd-shaped pupils; "dead clouded eye" from the inspiration was not wanted (user: the eye isn't blind / isn't torn out) → for this character keep the human-side eye alive. PowerShell variables are case-insensitive (`$P` = `$p`) — never reuse a name differing only in case. When repainting a feature, recolour inside the existing shading instead of filling a new shape: a filled ellipse always shows up as a ring or a patch.
+
+## Wallpaper: "point-blank" (started 2026-10-09, in progress) — `wallpapers/point-blank/`
+
+**Brief (user):**
+- The grin and the demon, seen from the grin's side (over his shoulder).
+- The grin holds his black clawed hands as finger guns.
+- On the demon, 2–3 almost transparent white-blue blasts: one tears its arm off, two others wound it.
+- Animated blood; the demon recoils.
+- A street with debris (rocks, glass…). A building behind the demon also takes 2–3 hits: dents/damage plus flying rubble.
+- **Animation style: hovering / levitation, a frozen moment.** Objects only drift a little back and forth.
+
+**Plan:**
+- bg with the building's craters baked in.
+- The grin from behind (foreground, bottom-left).
+- The demon recoiling, one arm missing, plus the arm as a separate floating sprite.
+- Procedural shots.
+- Hanging debris, glass and blood drops, each drifting with the new common engine option **`hover`** `{ x, y, period, phase }`: eases out along (x, y) px and back, in whole pixels.
+
+- **Round 1 (8 gens).** Sheets `refs/bg_round1.png`, `refs/sprites_round1.png`.
+  - bg Pixen 512x288 16001–16004: a ruined street at night, a grey concrete facade with craters. 16001 is the most detailed, but its craters were uniform cartoon black holes.
+  - Grin from behind, Pixen 256 `no_background`, 16101/16102: "over-the-shoulder view from behind … long battered black coat … arms stretched forward … black clawed hands make finger gun gestures". The user liked 16101, but wanted it readable that he grins, and the lower arm's angle was odd.
+  - Blasts, Pixen 128, 16201/16202: **rejected** ("crap, should look like shots from a gauss gun"). The franchise is never named in prompts.
+- **Round 2 (8 gens).** Sheets `refs/bg_round2.png`, `refs/grin_round2.png`.
+  - bg prompt: "building stands close … facade fills the upper two thirds … three blast craters of very different sizes and irregular shapes: one big ragged hole … one medium uneven oval crater … one small shallow chipped dent". Results:
+    - **16001b** (seed 16001 again): close facade, big/medium/small holes, a lamp, a strip of street.
+    - 16012: a huge hole + medium + small, long facade.
+    - 16013: two lamps, a big brick-ringed hole + a small one.
+    - 16014: a farther building.
+  - Grin prompt added "head turned slightly … pale cheek pushed up high by an extremely wide grin … squinting eye … both arms parallel". Results:
+    - 16101b: a full side profile with a big toothy grin, arms parallel.
+    - **16114**: from behind, the head turned to profile with a sly grin, both finger guns parallel to the right.
+    - 16112/16113: one hand raised, odd.
+  - **New engine layer `gauss`** (procedural, 0 gens) replaces the blast sprites.
+    - An optional beam `from`→`to`: a cyan haze, a 3px glow line and a 1px white core, wobbling per 10px segment.
+    - The impact: a radial cyan haze, `arcs` 1px lightning bolts (4 kinks, 40% forked) re-rolled `hz` times/s with a seeded rand, and a pulsing white core disc. Always additive.
+  - Test scene `scene.js` (`?bg=` / `?grin=` pick drafts), with a rect placeholder for the demon: render `refs/test_round2.png`.
+- **Grin round 3 (2026-10-09, ~10 gens).** User: "no, build on 16101 — you generated some goblin. The head must stay exactly in this position; add the grin if possible (head position is the priority); the veins vanished".
+  - **The head is kept pixel-identical.** Only the cheek beside the ear is inpainted: `inpaint_image` on a 128x128 crop at sprite (30,10), rect mask 22x28 at crop (54,48) = sprite x 84..105, y 58..85, seed 16121.
+    - Prompt: "edge of his pale grey cheek … pushed up high and round by an extremely wide grin; the far corner of the stretched grin curls up toward the ear as a thin dark crease".
+    - Result: a raised, rounded cheek bulging past the head's outline, with a dark crease. It reads as a grin from behind.
+  - Veins: 13 px of #141218 hand-painted on pale skin only (neck nape + cheek) → `assets/drafts/grin_back_16101_grin_v2.png`.
+  - Before/after `refs/grin_head_v1.png` (zoom) and `refs/grin_back_v2.png`.
+  - Rule for this user: when they pick a draft "as is", edit only the asked feature with a tight inpaint mask; regenerating with new wording changes the character ("a goblin").
+- **Grin rounds 4–5 (2026-10-09, 8 gens).** User on round 3: "you drew some horror on his face, like bees stung him; the smile must be barely visible; fix the arm". The inpainted cheek bulge was **rejected**.
+  - Round 4 (sheet `refs/grin_round4.png`, zoom `refs/grin_round4_zoom.png`):
+    - `edit_image_pixen` on 16101 via `image_url` = its job download URL: "keep everything … only a tiny hint of the cheek lifted by a smile, barely visible, no bulge; thin black veins; lower arm parallel". Results:
+      - 16131: lost the lower arm, skin turned peach.
+      - **16132**: head kept, grey skin, faint veins, lower arm straight — but its hand looked like holding a stick.
+    - Pixen from a prompt rebuilt from 16101 (16101c / 16141): different heads. 16141 turned to profile.
+  - Round 5 (sheet `refs/grin_round5.png`, 4x `refs/grin_16152_x4.png`), user: "the arm is still screwed":
+    - Edits on 16132: "redraw the lower hand as a copy of the upper hand … index forward, thumb up, three fingers curled". **16152** gives a proper finger gun, with the head and the faint cheek hint kept. 16151 still has the stick hand.
+    - Edits on 16101, "fix only the lower arm" (16153/16154): the lower arm was removed entirely.
+  - One `edit_image_pixen` call timed out fetching its `image_url` (not billed); a retry worked.
+  - Lessons:
+    - `edit_image_pixen` chained on its own output (16101 → 16132 → 16152) fixes one feature per step and keeps the rest.
+    - "Copy of the upper hand" works better than describing the gesture again.
+- **Grin round 6: the third arm (2026-10-09, 2 gens).** User: "the third arm bothers me".
+  - Cause: from behind, the coat's left flank on 16152 hangs down the left edge like a sleeve, while both real arms point right.
+  - Shifting the sprite left to hide it doesn't work: the head is at the left edge too.
+  - Edits on 16152, "no third arm on the left, just the coat's back":
+    - **16161**: a clean back, but it also dropped the lower arm.
+    - 16162: the lower hand floats detached on the left.
+  - **Fix = composite (0 gens):** 16161's clean back plus 16152's lower arm, i.e. every opaque 16152 pixel right of 16161's body edge on rows 138..221 → `assets/drafts/grin_back_comp_v1.png`. From behind, the lower arm reads as his left arm crossing in front of his body.
+    - Fingertips at sprite (255,84) / (255,176).
+    - Placed at (-14,60).
+  - Preview on a light grey bg `refs/grin_comp_v1.png` (dark sprites need a light bg to judge silhouettes). Scene render `refs/test_round4.png`.
+- **Grin round 7: "trick PixelLab" (2026-10-09, 5 gens).** User: "take 16153 (the edit that dropped the lower arm) and ask it to raise the second arm parallel to the first".
+  - `edit_image_pixen` on 16153, "he now raises his second arm too … parallel to the first, just below it … same finger gun". Sheet `refs/grin_round7.png`.
+    - **16172**: two parallel arms, a clean back, the head kept. But both hands just point; there are no thumbs.
+    - 16171/16173 still have one arm.
+  - Next link in the chain: "only change the two hands into finger guns … thumb straight up like a gun hammer" (sheet `refs/grin_round8.png`).
+    - **16182 chosen**: both hands proper finger guns. 16181 is similar.
+  - Full chain: 16101 → 16132 → 16152 → 16153 → 16172 → 16182.
+    - Fingertips at sprite (255,99) / (255,149); placed at (-14,60).
+    - The composite `grin_back_comp_v1.png` is superseded.
+  - Render `refs/test_round5.png`.
+  - Lesson: when an edit keeps mangling a limb, take a version where it's gone and ask to *add* it in the wanted pose. Pixen draws a new limb cleaner than it repairs a bad one.
 
 ## Wallpaper: "descent" (started 2026-10-08, **released 2026-10-09**) — `wallpapers/descent/`
 
