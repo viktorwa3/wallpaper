@@ -73,6 +73,12 @@
 //               an electric slug's shot frozen mid-moment: optional jittering white/cyan beam from `from` to `to`, and
 //               at `to` a cyan haze, `arcs` crackling lightning bolts (re-rolled `hz` times/s, some forked, reaching
 //               r·(1..1+reach)) and a pulsing white core of radius ~r·0.35. Always drawn additively.
+//   anomaly     { x, y, r, hz, phase, lens, swirl, rings, haze, rim, shell, ripple, color, dust, pull, dustColors }  a gravity blast
+//               frozen mid-moment, almost transparent: the scene under it is redrawn in `rings` concentric rings, each
+//               magnified more toward the centre (lens bulge up to 1+lens, breathing at `hz`) and twisted by up to `swirl`
+//               rad, plus a faint `color` haze, a fresnel `rim` glow at the edge,
+//               a shimmering 1px shell at r, one ripple ring per pulse expanding to 1.8r, and `dust` motes spiralling
+//               in (`pull` = turns/s). Reads the canvas, so give it a z above everything it should distort.
 //   vignette    { color, alpha, inner }                     darkens the frame edges (radial, transparent inside `inner` 0..1).
 //   particles   { count, color, speed, angle, length }      procedural rain
 // Common: id, z, alpha (0..1), blend (canvas globalCompositeOperation, e.g. "lighter"),
@@ -519,6 +525,74 @@
       for (let y = -cr - 1; y <= cr + 1; y++) for (let x = -cr - 1; x <= cr + 1; x++) if (x * x + y * y <= (cr + 1) * (cr + 1)) ctx.fillRect(tx + x, ty + y, 1, 1);
       ctx.globalAlpha = base; ctx.fillStyle = c.core;
       for (let y = -cr; y <= cr; y++) for (let x = -cr; x <= cr; x++) if (x * x + y * y <= cr * cr) ctx.fillRect(tx + x, ty + y, 1, 1);
+    },
+    // A gravity anomaly frozen mid-blast: almost transparent, pulsing. What lies behind it is copied and drawn back in
+    // concentric rings magnified toward the centre (a pixel-crisp lens bulge) that breathes with the pulse, plus a faint
+    // white-blue haze, a shimmering 1px shell, a ripple ring expanding once per pulse and dust spiralling inward.
+    anomaly(l, t) {
+      const R = Math.round(l.r ?? 16), x = Math.round(l.x), y = Math.round(l.y), D = R * 2;
+      const tt = t + (l.phase ?? 0), hz = l.hz ?? 0.7, ph = tt * hz;
+      const pulse = 0.5 + 0.5 * Math.sin(ph * Math.PI * 2);   // 0..1
+      const base = ctx.globalAlpha, col = l.color ?? '#d8f0ff';
+      if (!l._buf) { l._buf = document.createElement('canvas'); l._buf.width = l._buf.height = D; l._bctx = l._buf.getContext('2d'); }
+      // Lens: copy the scene under the anomaly, redraw it ring by ring (outside in), each ring scaled up more.
+      l._bctx.clearRect(0, 0, D, D);
+      l._bctx.drawImage(ctx.canvas, x - R, y - R, D, D, 0, 0, D, D);
+      const lens = (l.lens ?? 0.35) * (0.55 + 0.45 * pulse), rings = l.rings ?? 6;
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      for (let k = 0; k < rings; k++) {
+        const rk = R * (1 - k / rings), s = 1 + lens * (k + 1) / rings;
+        // Inner rings also twist a little, back and forth with the pulse (the swirl reads on textured walls).
+        const tw = (l.swirl ?? 0.12) * (k + 1) / rings * Math.sin(ph * Math.PI * 2 + 1);
+        ctx.save();
+        ctx.beginPath(); ctx.arc(x, y, rk, 0, Math.PI * 2); ctx.clip();
+        const w = Math.round(D * s);
+        ctx.translate(x, y); ctx.rotate(tw);
+        ctx.drawImage(l._buf, -(w >> 1), -(w >> 1), w, w);
+        ctx.restore();
+      }
+      ctx.restore();
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      // Haze: barely there, brighter at the top of the pulse.
+      const g = ctx.createRadialGradient(x, y, 0, x, y, R);
+      g.addColorStop(0, col); g.addColorStop(1, 'transparent');
+      ctx.globalAlpha = base * (l.haze ?? 0.1) * (0.5 + 0.5 * pulse);
+      ctx.fillStyle = g; ctx.fillRect(x - R, y - R, D, D);
+      // Rim: light gathering at the sphere's edge (soap-bubble fresnel) — what makes a transparent sphere readable.
+      const fr = ctx.createRadialGradient(x, y, 0, x, y, R * 1.08);
+      fr.addColorStop(0, 'transparent'); fr.addColorStop(0.62, 'transparent');
+      fr.addColorStop(0.9, col); fr.addColorStop(1, 'transparent');
+      ctx.globalAlpha = base * (l.rim ?? 0.28) * (0.6 + 0.4 * pulse);
+      ctx.fillStyle = fr; ctx.fillRect(x - D, y - D, D * 2, D * 2);
+      ctx.fillStyle = col;
+      // Shell: 1px circle, its pixels shimmering in and out.
+      const sr = R * (0.94 + 0.06 * pulse), n = Math.round(sr * 6.3);
+      for (let i = 0; i < n; i++) {
+        const a = i / n * Math.PI * 2, sh = valueNoise(i * 0.7, tt * 3);
+        if (sh < 0.35) continue;
+        ctx.globalAlpha = base * (l.shell ?? 0.3) * sh;
+        ctx.fillRect(Math.round(x + Math.cos(a) * sr), Math.round(y + Math.sin(a) * sr), 1, 1);
+      }
+      // Ripple: once per pulse a ring leaves the shell and fades out.
+      const rp = ph % 1, rr = R * (1 + rp * 0.8), rn = Math.round(rr * 6.3);
+      ctx.globalAlpha = base * (l.ripple ?? 0.22) * (1 - rp);
+      for (let i = 0; i < rn; i += 2) {
+        const a = i / rn * Math.PI * 2;
+        ctx.fillRect(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr), 1, 1);
+      }
+      ctx.restore();
+      // Dust: motes spiralling in from outside the shell and vanishing at the centre.
+      const dust = l.dust ?? 14, colors = l.dustColors ?? ['#9aa6b4', '#c8d4de', '#6e7884'];
+      for (let i = 0; i < dust; i++) {
+        const f = ((tt * (l.pull ?? 0.25) + i / dust) % 1 + 1) % 1, rad = R * 1.6 * (1 - f);
+        const a = i * 2.39996 + f * 5;   // golden-angle spread, winding as it falls in
+        ctx.globalAlpha = base * Math.min(1, f * 4, (1 - f) * 3) * 0.8;
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fillRect(Math.round(x + Math.cos(a) * rad), Math.round(y + Math.sin(a) * rad * 0.9), 1, 1);
+      }
+      ctx.globalAlpha = base;
     },
     // Vertical endless scroll of a tile (e.g. a shaft wall seen from a descending lift): `speed` px/s, positive =
     // content moves up. Drawn tiled over x,y,w,h (default the tile width / canvas height), whole-pixel offset.

@@ -37,6 +37,8 @@ shared/
   characters/grin/              # the grinning pale man: head.png (320x200 sky head), body.png (full body v9, 256x372),
                                 #   drafts/ (head*, _sheet_head*, body_*, head7302_crop, inpaint sources re_* / v*_*), refs/
                                 #   portrait/ — "not fully turned" grin portrait: portrait_256.png (+ its pixen draft), see its section
+                                #   aim/ — finger-gun back views (Pro 168, point-blank round 9) with black veins: aim_c2.png (used by point-blank),
+                                #   aim_c3.png; drafts/ (vein-less Pro originals, pixen vein edits), refs/veins_compare.png
   characters/demon/             # four-armed white demon: demon_v3_64_{south,south-west,west}.png, demon_breath_64x7.png, frames/
   effects/smoke/                # distant smoke loop smoke_pixmm_64x128x16_seed8601.png (+ its pixen still), frames/
 wallpapers/<name>/
@@ -194,6 +196,48 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
     - The composite `grin_back_comp_v1.png` is superseded.
   - Render `refs/test_round5.png`.
   - Lesson: when an edit keeps mangling a limb, take a version where it's gone and ask to *add* it in the wanted pose. Pixen draws a new limb cleaner than it repairs a bad one.
+- **Grin round 9: restart from the existing grin art (2026-10-09, 30 gens).** User: "all of it is crap; generate the grin again from my original description plus our existing grin art (from before this wallpaper)". The 16101 chain had drifted into a generic dark-haired man in gloves, with no grey skin, veins, suit or claws.
+  - Refs go by **`get_upload_url` + curl** (free, valid 15 min, `upload:<id>` lasts 3 days). This replaces inline base64 and its ~8k limit.
+  - Two references: `shared/characters/grin/body.png` (v9, "identity: face, hair, veins, suit, claw hands") and `rooftop-clash/assets/grin.png` ("same character in action: coat, pixel style").
+  - `create_image_pro` 168x168 now costs **15 gens** for 4 candidates (was 25). Sheet `refs/grin_pro_round9.png`, drafts `grin_pro_168_seed<S>_c<i>.png`.
+  - Prompts:
+    - 16301: "seen from BEHIND over his right shoulder … both arms stretched forward to the right, parallel … bare pitch-black hands … finger gun … head turned slightly, edge of cheek and corner of the grin visible".
+    - 16302: "three-quarter back view … head turned in profile … red glowing eye, wide needle-tooth grin".
+  - **Every candidate reads as our grin now**: pale grey face, grin, red eye, black suit and tattered coat, two parallel finger guns.
+    - 16301: back views with a subtle grin; c0/c2 cleanest.
+    - 16302: c3 is the best overall — back view, profile face with red eye and grin, both guns parallel. c2 is similar. c0 has wild hair. c1 faces left (usable with `flipX`).
+  - Pro again left light bars on the bottom edge of 16302 c0/c1; trim them.
+  - The hands are dark finger-gun shapes. Only some show long spindly claws (16302 c3's lower hand).
+  - **User: "awesome".** 16302 **c3** and **c2** are saved as shared art: `shared/characters/grin/aim/aim_c3.png`, `aim_c2.png`.
+  - point-blank uses **aim_c2**: `../../shared/characters/grin/aim/aim_c2.png` at (8,124), native 168 size. Its index fingertips (measured on a 4x zoom with an 8px grid) are sprite (126,50) for the back hand and (163,55) for the front hand; the gauss beams start there.
+  - `?grin=<seed>` still loads an old pixen draft at its old position. Render: `refs/test_round6.png`.
+  - Measuring gotcha: "rightmost opaque pixel per row" picks up the front hand's raised thumb, not the back hand's fingertip. Check fingertips on a zoom.
+- **Veins on aim_c2 / aim_c3 (2026-10-09, 4 gens).** User: "add black veins like the original".
+  - Hand-painting failed. The faces are ~15 px and already shaded dark, so 1px crack paths painted only over skin pixels landed as scattered dots (9–11 px).
+  - `edit_image_pixen` with `image_url` = an `upload:` ref, 1 gen each. Prompt: "keep everything exactly the same … only add thin black veins on his pale grey face and neck, like dark cracks spreading from around the red eye across the cheek, temple and down the neck. Subtle, thin, 1 pixel wide".
+  - Diffs vs the original: 180–310 px changed inside the face box, only 7–15 outside, except 16312 (112 outside, a new grin).
+  - Chosen: **16311** for c2 and **16314** for c3. 16313 turned the teeth into a white grid.
+  - Only the face box is pasted back onto the untouched Pro original: c2 at (52,16)–(92,60), c3 at (36,20)–(80,68). The rest stays pixel-identical.
+  - Finals overwrite `aim_c2.png` / `aim_c3.png`. The vein-less originals and the edits are in `aim/drafts/`.
+  - Comparison `aim/refs/veins_compare.png`; scene render `refs/test_round7.png`.
+  - Gotcha: the scratchpad holds an old copy of `png_index.py` with no `__main__` guard. Put the scratchpad *after* `scripts/` on `sys.path`.
+  - **Round 2 (0 gens).** User, on a scene screenshot: "where are they on this one?" The pixen veins were mid-grey streaks; at scene scale they read as shading.
+    - Fix: amplify the edit's own placement. Every face-box pixel the edit darkened by >25 luminance (skin only, not the red eye) is set to #0e0b10: 45 px on c2, 62 on c3.
+    - Now the veins read as black cracks in the scene (`refs/test_round8.png`).
+    - The soft versions are kept as `aim/drafts/aim_c*_veins_soft.png`.
+    - Lesson: small-face details from a model come out low-contrast. Amplify its placement by hand rather than repainting from scratch.
+- **`?aim=c3` (2026-10-10, 0 gens).** User wanted to see the scene with c3. scene.js has a table `AIM` with fingertips per sprite: c2 (126,50)/(163,55), c3 (131,55)/(165,70). The default stays c2, at the same position (8,124). Render: `refs/test_round8_c3.png`.
+- **Blasts → gravity anomalies, beams removed (2026-10-10, 0 gens).** User: "first a proper blast model, and remove the beams. It should look like an almost transparent pulsing blast, like a gravity anomaly." The franchise reference is never named in prompts.
+  - The `gauss` layers are gone from the scene; the engine layer stays, unused.
+  - **New engine layer `anomaly`** (procedural):
+    - **Lens:** the canvas under it is copied (drawImage of `ctx.canvas`, no getImageData, so `file://` is OK). It is redrawn in `rings` concentric clipped rings, each magnified more toward the centre (up to 1+`lens`, breathing at `hz`) and twisted back and forth by up to `swirl` rad. Nearest-neighbour, so it stays pixel-crisp.
+    - **Light:** a faint `color` haze (#d8f0ff); a **fresnel `rim`**, i.e. a radial gradient bright at 0.9r — it is what makes a transparent sphere readable; a shimmering 1px shell; one ripple ring per pulse expanding to 1.8r; `dust` motes spiralling inward.
+    - The lens reads what is already drawn, so the layer's z must be above everything it distorts.
+  - **Scene:**
+    - Building hits over the craters: r 30/20/12 with lens **0.12**. A strong lens just inflates a crater's black hole into a dark ball.
+    - Demon hits: r 24 at the shoulder (the arm tear) and r 15 in the side, lens 0.35.
+    - `hit()` helper, hz 0.6, staggered phases.
+  - Render `refs/test_round9.png`. The demon is still a flat placeholder rect, so the lens shows nothing there yet. The pulse/ripple/dust motion can't be judged in headless shots; judge it live.
 
 ## Wallpaper: "descent" (started 2026-10-08, **released 2026-10-09**) — `wallpapers/descent/`
 
