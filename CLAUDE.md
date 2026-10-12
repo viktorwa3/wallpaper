@@ -238,6 +238,104 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
     - Demon hits: r 24 at the shoulder (the arm tear) and r 15 in the side, lens 0.35.
     - `hit()` helper, hz 0.6, staggered phases.
   - Render `refs/test_round9.png`. The demon is still a flat placeholder rect, so the lens shows nothing there yet. The pulse/ripple/dust motion can't be judged in headless shots; judge it live.
+- **Shine blasts + craters moved (2026-10-11, 24 gens).** User: "make the blasts almost transparent and shining, like animated cards in a card game; move the holes closer to the demon; the big hole has ugly roots".
+  - **New engine layer `shine`** (now used for every hit; `anomaly` stays in the engine, unused). All additive, nearly transparent:
+    - a breathing bloom and a sphere that is bright only at its rim, plus a small hot core;
+    - `wisps` luminous strands orbiting inside, white heads with fading tails;
+    - a diagonal light band sweeping across, clipped to the sphere, every `sweep` s;
+    - `glints`: 4-point stars that pop and fade around it;
+    - an optional faint `lens` refraction (0.08 here).
+  - **bg edited with Pro Flash inpaint**, 256² tiles via `upload:` refs for both image and mask:
+    - Left tile (seed 16401, 9 gens): the big crater with its root-like cracks and the medium crater are painted out into a plain cracked wall.
+    - Right tile (16402, 9 gens): asked for two craters near the demon; only the small one at (420,105) came out.
+    - A 128² crop (16403, 6 gens): a medium crater at (288,110), under the window left of the demon.
+    - Kept: the old small crater at (355,141), now hidden behind the demon placeholder.
+    - Result `assets/drafts/bg_16001b_moved_v2.png`, the scene default. `?bg=<seed>` still loads the raw pixen drafts.
+  - Hits: building (288,110) r12, (355,141) r10, (420,105) r7; demon (332,160) r24 and (360,210) r15.
+  - Render `refs/test_round10.png`.
+  - Lesson: Pro Flash with a mask asking for two objects drew only one. Ask for one object per mask/call.
+- **Waves instead of shine (2026-10-11, 6 gens).** User: "not it at all; also part of the hole isn't visible; make the blasts almost transparent waves bursting from the centre". The `shine` layer is rejected (stays in the engine, unused).
+  - **New engine layer `wave`:**
+    - `rings` shockwaves per `period` s burst from the centre, ease out to r and fade.
+    - Each ring refracts the scene in its band: an annulus clip of the canvas copy, redrawn magnified by up to 1+2·`lens`.
+    - Each ring has a soft light front (radial gradient peaking at the ring) and a broken 1px crest.
+    - A short centre flash marks each burst.
+    - Scene: period 1.8, 3 rings.
+  - **The cut crater:** the (288,110) one sat under a window sill, so half of it was hidden. Dropped by going back to v1.
+    - The new crater is a 128² Pro Flash crop at canvas (276,30), seed 16404, 6 gens: a full round crater on open wall at **(349,86)**, above the demon, half in the lamp light.
+    - Result: `assets/drafts/bg_16001b_moved_v3.png`, now the default.
+  - Hits: building (349,86) r18, (355,141) r14, (420,105) r11; demon (332,160) r30 and (360,210) r20.
+  - Render `refs/test_round11.png`.
+- **Demon + frozen-moment debris (2026-10-11, 17 gens).** User: "this is good now; adjust so the blasts sit on the holes; add the demon and the rest of the animation".
+  - **Waves centred on the holes**, measured by flood-filling each crater's dark blob: (350,88), (356,143), (422,111). The third crater is checked on an 8x zoom (centroid of the hole).
+  - **Demon** (15 gens): `create_image_pro` 168, seed 16501, refs = rooftop `assets/demon.png` (identity/style) + `demon_v3_64_south-west`.
+    - Prompt: "same four-armed demon … facing LEFT … violently recoiling backward from an impact … one upper arm missing, torn off at the shoulder, leaving a ragged dark red stump". No "blood"; it passed the filter.
+    - All 4 candidates read as our demon. c1–c3 have the stump on the shoulder facing the grin.
+    - **c1 chosen** → `assets/demon.png` at (255,102), feet on the street ~row 262. Sheet `refs/demon_round1.png`.
+    - Sprite points: stump (60,49), eyes (107,25) (yellow `glow`), soles row 160.
+    - The demon and its eye glow share the hover `sway` {x 2, y -1, period 4}.
+  - **Severed arm** (2 gens): pixen 64 `no_background`, "a single detached long muscular bone-beige demon arm with a clawed hand … broken off at the shoulder with a ragged dark red end, floating in mid-air". **16512 chosen** → `assets/demon_arm.png`. It is placed 86/44 px up-left of the stump with hover (-4,-2). Right next to the stump it read as still attached.
+  - **New engine layer `float`:** frozen-moment debris hanging in mid-air. Pieces are seeded in an `area`; each eases out by ~`drift` px along `dir`±spread and back over ~`period` s, in whole pixels. Kinds:
+    - `drop`: bright head plus a dark tail trailing behind its drift;
+    - `glass`: a sliver turning through 4 orientations, with an occasional glint;
+    - `rock`: a lit corner and a dark underside.
+  - Scene floats:
+    - blood from the stump toward the upper left (18 drops) and from the side wound (8);
+    - rubble in front of crater 1 (9) and crater 3 (6);
+    - glass across the street (16, glint #e8f6ff);
+    - street rocks (14).
+  - **Wave layers get no `hover`.** The lens samples untranslated canvas coordinates.
+  - **Demon waves use `lens: 0`.** Even 0.02 shifted the dark window edge behind the demon. A light ring over a dark window still leaves a dark "inner" area. That is the effect itself, kept.
+  - `assets/bg.png` = `drafts/bg_16001b_moved_v3.png`, the default.
+  - Render `refs/test_round12.png`.
+- **Gushing blood, static demon (2026-10-11, 0 gens).** User: "remove the demon's and the arm's movement; the blood animation is crap — more of it; the side under the blast should be gushing blood, the arm too".
+  - The `hover` is removed from the demon, its eye glow and the arm. The `float` blood drops are removed too; `float` is still used for rubble, glass and rocks.
+  - **New engine layer `gush`.** It is stateless: each drop n gets spawn time n/rate and hash-seeded angle, speed and life, and its position is analytic (x0 + v·age, + ½g·age²). It shows in headless stills, with no prewarm.
+    - Drops carry 1–4px motion streaks and darken hot → mid → dark over their life; 30% are 2px.
+    - A thick jet at the source swells on every beat (`hz`). The beat also throws the drops faster, so it spurts like a pulse.
+  - Sources:
+    - side wound, sprite (92,82): dir 200°, 140 drops/s, jet 12 / width 3;
+    - stump (60,49): dir 215°, 100/s, jet 7;
+    - the arm's torn end, arm sprite (55,11): dir −15°, 40/s, jet 4 / width 1.
+  - Render `refs/test_round13.png`.
+- **Static anime blood + punched side (2026-10-11, 22 gens).** User: "change the blood — no animation at all for now; the splashes should be more anime style; the side should have a chunk being punched out (in progress)". The `gush` layers are removed from the scene; the engine layer stays, unused.
+  - **Punched side** (2 × Pro Flash inpaint on a 128² crop of the demon at sprite (28,18), 6 gens each):
+    - 16601, mask 50x36 on the flank: a red wedge with small chunks, flat, plus a seam on the loincloth.
+    - **16602 chosen.** The mask is wider and runs into the empty space on the left (crop x 6..70, y 56..88). Prompt: "a blast is punching straight through the left flank right now: a large round ragged hole … jagged skin edges bent outward, deep dark red cavity, big chunks … and dark red liquid bursting out … flying away to the left … frozen mid-air, anime style impact". Result: a hole with spray streaks and flying chunks. The lower-left forearm became one of the chunks.
+    - Only the mask area is pasted into `assets/demon.png`. The original is `drafts/demon_recoil_pro_168_seed16501_c1.png`.
+    - New hole centre: sprite (74,80). The lower wave moved there.
+  - **Splash:** `create_image_pro` 128x96, seed 16611, 10 gens (4 candidates; sheet `refs/splash_round1.png`). Prompt: "anime style splash of thick dark red liquid frozen in mid-air, bursting out sideways to the left: one thick curved sweeping main stream that breaks up into many round droplets … sharp tapered tails … flat cel shading in deep crimson … dark outline". The demon sprite was the style image (outline, detail). All 4 are good. The stream base sits in the bottom-right corner (~(120,88)), cut flat by the sprite border.
+    - **c0** → `assets/splash_side.png`, its base on the punched side.
+    - It is drawn **behind the demon (z 2.5)**, so the body hides the cut base and the spray bursts out from behind the torso. The orphaned arm (z 5) stays on top.
+    - A second splash (c2) on the stump was dropped: its cut base hung in open air above the shoulder.
+  - Render `refs/test_round14.png`.
+  - Lesson: sprites whose stream starts at their own border need that border hidden behind something. Otherwise the cut reads as a hard vertical line.
+- **Round 2 (2026-10-11, 22 gens).** User: "very sad; pick a different blood pattern; fix the bad inpaint". The red stream read as a cape or flag. The 16602 inpaint smeared the flank, turned the lower-left arm into a floating hand, and left a seam on the loincloth.
+  - **Wound redo from the original c1:**
+    - Mask cut to the belly-flank only, crop (36..64, 54..72): above the loincloth line, clear of the lower-left arm.
+    - Prompt without flying chunks: "a deep round wound punched into the side of the belly: a ragged hole with torn skin edges curling outward, a dark red cavity, shaded with the body's own lighting … the rest of the body and the arm stay unchanged".
+    - 16603: a red smear. **16604: a dark hole with a torn rim → chosen.** Hole centre at sprite (80,80); the lower wave moved there.
+  - **Blood = radial bursts, not a stream:** `create_image_pro` 96, seed 16621, 10 gens, style image = the demon. Prompt: "anime style radial burst of dark red liquid droplets frozen in mid-air, exploding outward from one small central point … biased to the left: many teardrop-shaped droplets … tails toward the centre, a few big round blobs, a ring of tiny dots, no continuous stream". Sheet `refs/burst_round1.png`.
+    - **c1** (big teardrops and blobs) → `assets/blood_side.png`, centre (70,47) on the hole.
+    - **c2** (sparser, fine) → `assets/blood_stump.png`, centre (62,48) on the stump.
+    - Both are drawn in front of the demon (z 6). With no stream base there is no cut edge to hide.
+  - `splash_side.png` is deleted; its draft stays.
+  - Render `refs/test_round15.png`.
+  - Lesson: for a "chunk being blown out", a tight mask on the wound alone works. Asking for flying chunks lets the model eat neighbouring limbs.
+- **Round 3 (2026-10-11, 0 gens).** User: "better; remove the big drops; the arm doesn't fit the lighting; a little fountain from the arm too".
+  - **Side burst:** **c0** instead of c1 (thin radiating spikes and fine dots, no big teardrops/blobs), centre (66,47) on the hole.
+    - Cutting c1's blobs out didn't work: they hang off the core by their tails, so removing components > 30 px removed nothing. A radius cut left only a stubby ring.
+  - **Arm graded into the night:** image `grade` multiply #7d86a0 0.8 plus a multiply #3a3448 0.35 gradient. The raw pixen arm was bright orange-beige and glowed against the blue wall.
+  - **Arm fountain:** `assets/blood_arm.png` = c2 mirrored (sprays right, back toward the body), cut to a 22px radius around its centre (33,48) so it stays small. Placed on the arm's torn end (arm sprite (55,11)).
+  - Render `refs/test_round16.png`.
+- **Round 4 (2026-10-11, 0 gens).** User: "move the arm's blood to the tear; remove the big drops, they're still there".
+  - **True burst centres.** c2's centre is (54,54), not (62,48); mirrored it is (41,54). The arm fountain now sits exactly on the torn end, and the stump burst moved too.
+  - **Blob stripping** (python, per burst, from the untouched drafts):
+    - Outside a core radius, every pixel whose 5x5 neighbourhood is fully opaque counts as "thick". Thick pixels are erased together with a 3px margin.
+    - Thin spikes (≤4 px wide) and small droplets survive. Small loose fragments next to erased blobs are dropped too.
+    - Core radius: side c0 22 (its dense core is wide; at 12 a gap opened between the core and the spikes), stump c2 10, arm 8 (+ the 22px radius cut).
+    - A 3x3-opaque test was too strict: it hollowed the spikes out to their black outlines.
+  - Render `refs/test_round17.png`.
 
 ## Wallpaper: "descent" (started 2026-10-08, **released 2026-10-09**) — `wallpapers/descent/`
 

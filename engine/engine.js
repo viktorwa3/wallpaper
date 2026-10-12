@@ -79,6 +79,23 @@
 //               rad, plus a faint `color` haze, a fresnel `rim` glow at the edge,
 //               a shimmering 1px shell at r, one ripple ring per pulse expanding to 1.8r, and `dust` motes spiralling
 //               in (`pull` = turns/s). Reads the canvas, so give it a z above everything it should distort.
+//   shine       { x, y, r, hz, phase, colors: [core, glow, edge], bloom, rim, core, wisps, wispAlpha, sweep, sweepAlpha,
+//               glints, lens }  a shining, almost transparent blast animated like a premium card: breathing bloom +
+//               rim-bright sphere + small hot core (all additive), `wisps` luminous strands orbiting inside, a light band
+//               sweeping across every `sweep` s, `glints` 4-point stars twinkling around; optional faint `lens` refraction.
+//   wave        { x, y, r, period, rings, width, lens, color, alpha, crest, flash, phase }  almost transparent shockwaves
+//               bursting from x,y: `rings` rings per `period` s, each easing out to r and fading; each refracts the
+//               scene in its band (magnified by up to 1+2·lens), carries a soft light front + a broken 1px crest, and
+//               a short centre flash marks its burst. Reads the canvas: give it a z above what it should distort.
+//   gush        { x, y, dir, spread, speed: [min, max], rate, life: [min, max], gravity, hz, jet, jetWidth, colors, seed }
+//               blood gushing from a wound: `rate` drops/s leave x,y along `dir` ±spread/2 degrees, arc under `gravity`
+//               with short motion streaks and darken over their `life`; a thick jet at the source swells on each beat
+//               (`hz`, the spurts also throw the drops faster). Stateless: every drop is computed from time.
+//   float       { kind: 'drop' | 'glass' | 'rock', area: [x, y, w, h], count | points: [[x, y], ...], size: [min, max],
+//               dir, spread, drift, period, colors, glint, seed }  frozen-moment debris hanging in mid-air: pieces placed
+//               once (seeded), each easing out by ~`drift` px along `dir` ±spread/2 degrees and back over ~`period` s.
+//               drop = bright head + dark tail trailing behind its drift; glass = sliver turning through 4 orientations,
+//               occasional `glint` pixel; rock = chunk with a lit corner and a dark underside.
 //   vignette    { color, alpha, inner }                     darkens the frame edges (radial, transparent inside `inner` 0..1).
 //   particles   { count, color, speed, angle, length }      procedural rain
 // Common: id, z, alpha (0..1), blend (canvas globalCompositeOperation, e.g. "lighter"),
@@ -591,6 +608,197 @@
         ctx.globalAlpha = base * Math.min(1, f * 4, (1 - f) * 3) * 0.8;
         ctx.fillStyle = colors[i % colors.length];
         ctx.fillRect(Math.round(x + Math.cos(a) * rad), Math.round(y + Math.sin(a) * rad * 0.9), 1, 1);
+      }
+      ctx.globalAlpha = base;
+    },
+    // A shining, almost transparent blast, animated like a premium trading card: a breathing glow, luminous wisps
+    // circling inside, a light band sweeping across now and then, and star-shaped glints twinkling around it.
+    shine(l, t) {
+      const R = l.r ?? 16, x = Math.round(l.x), y = Math.round(l.y), tt = t + (l.phase ?? 0);
+      const pulse = 0.5 + 0.5 * Math.sin(tt * (l.hz ?? 0.6) * Math.PI * 2);
+      const [core, glow, edge] = l.colors ?? ['#ffffff', '#cdeeff', '#7cc8ff'];
+      const base = ctx.globalAlpha, rr = R * (0.94 + 0.08 * pulse);
+      if (l.lens) {   // optional faint refraction of what lies behind
+        if (!l._buf) { l._buf = document.createElement('canvas'); l._buf.width = l._buf.height = R * 2; l._bctx = l._buf.getContext('2d'); }
+        l._bctx.clearRect(0, 0, R * 2, R * 2);
+        l._bctx.drawImage(ctx.canvas, x - R, y - R, R * 2, R * 2, 0, 0, R * 2, R * 2);
+        const w = Math.round(R * 2 * (1 + l.lens * (0.6 + 0.4 * pulse)));
+        ctx.save(); ctx.imageSmoothingEnabled = false;
+        ctx.beginPath(); ctx.arc(x, y, R * 0.9, 0, Math.PI * 2); ctx.clip();
+        ctx.drawImage(l._buf, x - (w >> 1), y - (w >> 1), w, w);
+        ctx.restore();
+      }
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const blob = (r, stops, a) => {
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        for (const [o, c] of stops) g.addColorStop(o, c);
+        ctx.globalAlpha = base * a; ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      };
+      // Body: a soft outer bloom, the sphere's own faint fill brightening toward the rim, and a small hot core.
+      blob(rr * 1.6, [[0, edge], [1, 'transparent']], (l.bloom ?? 0.14) * (0.6 + 0.4 * pulse));
+      blob(rr, [[0, 'transparent'], [0.55, 'transparent'], [0.88, glow], [1, 'transparent']], (l.rim ?? 0.35) * (0.7 + 0.3 * pulse));
+      blob(rr * 0.35, [[0, core], [1, 'transparent']], (l.core ?? 0.5) * (0.6 + 0.4 * pulse));
+      // Wisps: luminous strands orbiting inside the sphere, each a short arc of pixels fading toward its tail.
+      const wisps = l.wisps ?? 4;
+      for (let i = 0; i < wisps; i++) {
+        const dir = i % 2 ? -1 : 1, sp = (0.6 + 0.25 * i) * dir, wr = rr * (0.35 + 0.5 * ((i * 0.37) % 1));
+        const head = tt * sp * Math.PI + i * 2.1, len = 14 + 4 * i;
+        for (let j = 0; j < len; j++) {
+          const a = head - dir * j * 0.07, wob = 1 + 0.12 * Math.sin(a * 3 + tt);
+          ctx.globalAlpha = base * (l.wispAlpha ?? 0.55) * (1 - j / len);
+          ctx.fillStyle = j < 3 ? core : glow;
+          ctx.fillRect(Math.round(x + Math.cos(a) * wr * wob), Math.round(y + Math.sin(a) * wr * wob * 0.85), 1, 1);
+        }
+      }
+      // Sweep: a diagonal band of light crossing the sphere once every `sweep` s (clipped to the sphere).
+      const period = l.sweep ?? 2.6, sp = ((tt / period) % 1 + 1) % 1;
+      if (sp < 0.35) {
+        const k = sp / 0.35, off = (k * 2 - 1) * rr * 1.3;
+        ctx.save();
+        ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.clip();
+        ctx.translate(x, y); ctx.rotate(-0.7);
+        const g = ctx.createLinearGradient(off - 4, 0, off + 4, 0);
+        g.addColorStop(0, 'transparent'); g.addColorStop(0.5, core); g.addColorStop(1, 'transparent');
+        ctx.globalAlpha = base * (l.sweepAlpha ?? 0.45) * Math.sin(k * Math.PI);
+        ctx.fillStyle = g; ctx.fillRect(off - 4, -rr * 1.5, 8, rr * 3);
+        ctx.restore();
+      }
+      // Glints: 4-point stars popping up around the sphere, each living ~0.6 s.
+      const glints = l.glints ?? 5;
+      for (let i = 0; i < glints; i++) {
+        const cyc = tt * 1.6 + i * 0.37, n = Math.floor(cyc), f = cyc - n;
+        const a = hash(n, i * 3.7) * Math.PI * 2, d = rr * (0.3 + 0.9 * hash(i * 1.3, n));
+        const gx = Math.round(x + Math.cos(a) * d), gy = Math.round(y + Math.sin(a) * d), s = Math.sin(f * Math.PI);
+        ctx.globalAlpha = base * s * 0.9; ctx.fillStyle = core;
+        ctx.fillRect(gx, gy, 1, 1);
+        if (s > 0.5) {
+          ctx.globalAlpha = base * (s - 0.5) * 1.2; ctx.fillStyle = glow;
+          ctx.fillRect(gx - 1, gy, 1, 1); ctx.fillRect(gx + 1, gy, 1, 1); ctx.fillRect(gx, gy - 1, 1, 1); ctx.fillRect(gx, gy + 1, 1, 1);
+          if (s > 0.85) { ctx.fillRect(gx - 2, gy, 1, 1); ctx.fillRect(gx + 2, gy, 1, 1); ctx.fillRect(gx, gy - 2, 1, 1); ctx.fillRect(gx, gy + 2, 1, 1); }
+        }
+      }
+      ctx.restore();
+      ctx.globalAlpha = base;
+    },
+    // Shockwaves bursting from a centre, almost transparent: every period/rings s a new ring leaves the centre, grows
+    // to r (fast, then slowing) and fades. Each ring refracts what's behind it (an annulus of the scene redrawn slightly
+    // magnified) and carries a faint light front; a short soft flash marks each burst.
+    wave(l, t) {
+      const R = l.r ?? 20, x = Math.round(l.x), y = Math.round(l.y), D = Math.ceil(R * 2.4);
+      const tt = t + (l.phase ?? 0), period = l.period ?? 1.8, n = l.rings ?? 3, width = l.width ?? 3;
+      const col = l.color ?? '#dff4ff', base = ctx.globalAlpha, lens = l.lens ?? 0.08;
+      if (!l._buf) { l._buf = document.createElement('canvas'); l._buf.width = l._buf.height = D; l._bctx = l._buf.getContext('2d'); }
+      l._bctx.clearRect(0, 0, D, D);
+      l._bctx.drawImage(ctx.canvas, x - D / 2, y - D / 2, D, D, 0, 0, D, D);
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      for (let i = 0; i < n; i++) {
+        const k = (((tt / period) + i / n) % 1 + 1) % 1;          // 0 → 1 over a ring's life
+        const e = 1 - (1 - k) * (1 - k), rr = 2 + (R - 2) * e;    // ease-out growth
+        const fade = (1 - k) * Math.min(1, k * 6), w = width * (0.6 + 0.8 * (1 - k));
+        // Refraction: the scene inside this ring's band, redrawn magnified (bulging outward like a pressure front).
+        ctx.save();
+        ctx.beginPath(); ctx.arc(x, y, rr + w, 0, Math.PI * 2); ctx.arc(x, y, Math.max(0, rr - w), 0, Math.PI * 2, true);
+        ctx.clip();
+        const s = Math.round(D * (1 + lens * fade * 2));
+        ctx.drawImage(l._buf, x - (s >> 1), y - (s >> 1), s, s);
+        ctx.restore();
+        // Light front: a soft band peaking at the ring, plus faint 1px crest pixels.
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createRadialGradient(x, y, Math.max(0, rr - w * 1.5), x, y, rr + w);
+        g.addColorStop(0, 'transparent'); g.addColorStop(0.7, col); g.addColorStop(1, 'transparent');
+        ctx.globalAlpha = base * (l.alpha ?? 0.22) * fade;
+        ctx.fillStyle = g; ctx.fillRect(x - rr - w, y - rr - w, (rr + w) * 2, (rr + w) * 2);
+        const m = Math.round(rr * 6.3);
+        ctx.globalAlpha = base * (l.crest ?? 0.3) * fade; ctx.fillStyle = col;
+        for (let j = 0; j < m; j++) {
+          if (valueNoise(j * 0.5, i * 7 + Math.floor(tt / period)) < 0.45) continue;   // broken, uneven crest
+          const a = j / m * Math.PI * 2;
+          ctx.fillRect(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr), 1, 1);
+        }
+        // Burst flash at the centre while the ring is young.
+        if (k < 0.18) {
+          const f = 1 - k / 0.18, fr = R * 0.45;
+          const h = ctx.createRadialGradient(x, y, 0, x, y, fr);
+          h.addColorStop(0, col); h.addColorStop(1, 'transparent');
+          ctx.globalAlpha = base * (l.flash ?? 0.35) * f;
+          ctx.fillStyle = h; ctx.fillRect(x - fr, y - fr, fr * 2, fr * 2);
+        }
+        ctx.restore();
+      }
+      ctx.restore();
+      ctx.globalAlpha = base;
+    },
+    // Blood gushing from a wound: a thick pulsing jet at the source breaking into a spray of drops that arc out along
+    // `dir` and fall under gravity. Stateless (every drop is computed from time), so it also shows in still frames.
+    gush(l, t) {
+      const x0 = l.x, y0 = l.y, rate = l.rate ?? 70, [l0, l1] = l.life ?? [0.5, 1.1], [v0, v1] = l.speed ?? [40, 90];
+      const dir = (l.dir ?? 180) * Math.PI / 180, spread = (l.spread ?? 40) * Math.PI / 180, g = l.gravity ?? 160;
+      const hz = l.hz ?? 1.4, seed = l.seed ?? 1, [dark, mid, hot] = l.colors ?? ['#4a060a', '#8e1016', '#c8242a'];
+      const beat = (ts) => { const s = Math.max(0, Math.sin((ts * hz + seed * 0.13) * Math.PI * 2)); return 0.55 + 0.7 * s * s; };
+      const px = (x, y, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); };
+      const n0 = Math.floor(t * rate), count = Math.ceil(rate * l1);
+      for (let i = 0; i < count; i++) {
+        const n = n0 - i, ts = n / rate, age = t - ts;
+        const life = l0 + (l1 - l0) * hash(n, seed * 3.1);
+        if (age < 0 || age > life) continue;
+        const a = dir + (hash(n * 1.7, seed) - 0.5) * spread, v = (v0 + (v1 - v0) * hash(seed, n * 0.9)) * beat(ts);
+        const vx = Math.cos(a) * v, vy = Math.sin(a) * v + g * age;
+        const x = x0 + Math.cos(a) * v * age, y = y0 + Math.sin(a) * v * age + 0.5 * g * age * age;
+        const k = age / life, big = hash(n, seed * 7.3) > 0.7;
+        // Streak behind the drop along its velocity, then the drop (2px for the bigger ones), darkening as it flies.
+        const sp = Math.hypot(vx, vy) || 1, tail = Math.min(4, Math.round(sp / 30));
+        for (let j = 1; j <= tail; j++) px(x - vx / sp * j, y - vy / sp * j, j === 1 ? mid : dark);
+        const c = k < 0.3 ? hot : k < 0.7 ? mid : dark;
+        px(x, y, c);
+        if (big) { px(x + 1, y, c); px(x, y + 1, dark); }
+      }
+      // Jet: a thick column at the source whose length swells with each beat.
+      const jet = (l.jet ?? 7) * beat(t), jw = l.jetWidth ?? 2, ux = Math.cos(dir), uy = Math.sin(dir);
+      for (let d = 0; d <= jet; d++) {
+        const w = Math.max(0, Math.round(jw * (1 - d / (jet + 1)) + 0.4)), wob = Math.sin(t * 23 + d) * 0.5;
+        for (let s = -w; s <= w; s++) px(x0 + ux * d - uy * (s + wob), y0 + uy * d + ux * (s + wob), Math.abs(s) === w && w ? dark : d < 2 ? hot : mid);
+      }
+    },
+    // Frozen-moment debris: pieces hanging in mid-air, each easing back and forth along its own small drift vector
+    // (whole pixels). Pieces are placed once (seeded) in `area`, or at explicit `points`.
+    float(l, t) {
+      if (!l._p) {
+        let seed = (l.seed ?? 1) * 7919 + 13;
+        const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed & 0xffff) / 65536; };
+        const [ax, ay, aw, ah] = l.area ?? [0, 0, W, H], [s0, s1] = l.size ?? [1, 3];
+        const pts = l.points ?? Array.from({ length: l.count ?? 12 }, () => [ax + rnd() * aw, ay + rnd() * ah]);
+        const dir = (l.dir ?? 0) * Math.PI / 180, spread = (l.spread ?? 60) * Math.PI / 180;
+        l._p = pts.map(([x, y]) => {
+          const a = dir + (rnd() - 0.5) * spread;
+          return { x, y, a, s: Math.round(s0 + rnd() * (s1 - s0)), d: (l.drift ?? 3) * (0.5 + rnd()),
+            per: (l.period ?? 5) * (0.7 + 0.6 * rnd()), ph: rnd(), rot: Math.floor(rnd() * 4), c: Math.floor(rnd() * 1e6) };
+        });
+      }
+      const kind = l.kind ?? 'rock', base = ctx.globalAlpha;
+      const colors = l.colors ?? (kind === 'drop' ? ['#4a070b', '#8e1217', '#c92a30'] : kind === 'glass' ? ['#6f8798', '#a9c3d4'] : ['#3a3d44', '#5c616b', '#7d838e']);
+      const px = (x, y, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, 1, 1); };
+      for (const p of l._p) {
+        const e = 0.5 - 0.5 * Math.cos(((t / p.per + p.ph) % 1) * Math.PI * 2);   // 0 → 1 → 0, eased
+        const x = Math.round(p.x + Math.cos(p.a) * p.d * e), y = Math.round(p.y + Math.sin(p.a) * p.d * e);
+        const ux = Math.round(Math.cos(p.a)), uy = Math.round(Math.sin(p.a));
+        if (kind === 'drop') {
+          // A drop flung along its drift direction: bright head, darker tail trailing behind it.
+          px(x, y, colors[2]);
+          for (let i = 1; i <= p.s; i++) px(x - ux * i, y - uy * i, i === 1 ? colors[1] : colors[0]);
+          if (p.s >= 3) px(x + (uy ? 1 : 0), y + (ux ? 1 : 0), colors[1]);
+        } else if (kind === 'glass') {
+          // A sliver turning slowly through 4 orientations; now and then one pixel glints.
+          const o = (p.rot + Math.floor(t / p.per * 2)) % 4, d = [[1, 0], [1, 1], [0, 1], [-1, 1]][o];
+          for (let i = 0; i < p.s + 1; i++) px(x + d[0] * i, y + d[1] * i, colors[i % colors.length]);
+          if (l.glint && hash(Math.floor(t * 3), p.c) > 0.9) px(x, y, l.glint);
+        } else {
+          // A chunk of concrete: lit top-left, dark underside.
+          ctx.fillStyle = colors[1]; ctx.fillRect(x, y, p.s, Math.max(1, p.s - 1));
+          if (p.s > 1) { px(x, y, colors[2]); ctx.fillStyle = colors[0]; ctx.fillRect(x, y + p.s - 1, p.s, 1); }
+        }
       }
       ctx.globalAlpha = base;
     },
