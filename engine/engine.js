@@ -87,10 +87,11 @@
 //               bursting from x,y: `rings` rings per `period` s, each easing out to r and fading; each refracts the
 //               scene in its band (magnified by up to 1+2·lens), carries a soft light front + a broken 1px crest, and
 //               a short centre flash marks its burst. Reads the canvas: give it a z above what it should distort.
-//   shards      { src, x, y, pieces: [[sx, sy, w, h, ox, oy], ...], from: [x, y], drift, reach, period, seed, grade }
+//   shards      { src, x, y, pieces: [[sx, sy, w, h, ox, oy], ...], from: [x, y], drift, reach, period, share, still, seed, grade }
 //               a generated debris burst cut into its pieces (scripts/split-pieces.py prints `pieces` and writes the atlas
 //               `src`): piece i = atlas rect (sx, sy, w, h) drawn at sprite offset (ox, oy) from x,y, drifting away from
-//               `from` (sprite px) and back over ~`period` s by up to drift·dist/reach px — far pieces move more.
+//               `from` (sprite px) and back over ~`period` s by up to drift·dist/reach px — far pieces move more. Only a
+//               `share` (0..1) of the pieces moves, and none closer than `still` px to `from` (e.g. a burst's core).
 //   gush        { x, y, dir, spread, speed: [min, max], rate, life: [min, max], gravity, hz, jet, jetWidth, colors, seed }
 //               blood gushing from a wound: `rate` drops/s leave x,y along `dir` ±spread/2 degrees, arc under `gravity`
 //               with short motion streaks and darken over their `life`; a thick jet at the source swells on each beat
@@ -775,7 +776,9 @@
       const [fx, fy] = l.from ?? [0, 0], x0 = Math.round(l.x), y0 = Math.round(l.y), per = l.period ?? 6;
       l.pieces.forEach(([sx, sy, w, h, ox, oy], i) => {
         const cx = ox + w / 2 - fx, cy = oy + h / 2 - fy, d = Math.hypot(cx, cy) || 1;
-        const amp = (l.drift ?? 4) * d / (l.reach ?? 50), ph = hash(i * 1.37, l.seed ?? 1);
+        // share < 1: only that fraction of the pieces drifts (the rest stays put); pieces inside `still` px stay too.
+        const moves = hash(i * 2.11, (l.seed ?? 1) + 7) < (l.share ?? 1) && d > (l.still ?? 0);
+        const amp = moves ? (l.drift ?? 4) * d / (l.reach ?? 50) : 0, ph = hash(i * 1.37, l.seed ?? 1);
         const e = 0.5 - 0.5 * Math.cos(((t / (per * (0.8 + 0.4 * ph)) + ph) % 1) * Math.PI * 2);
         ctx.drawImage(l._faded ?? l._img, sx, sy, w, h, x0 + ox + Math.round(cx / d * amp * e), y0 + oy + Math.round(cy / d * amp * e), w, h);
       });

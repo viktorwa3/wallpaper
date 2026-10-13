@@ -1,7 +1,8 @@
 """Split a debris sprite into its separate pieces (8-connected opaque components) for the engine `shards` layer.
 Each piece is repacked alone into an atlas strip (so overlapping bounding boxes never copy a neighbour's pixels) and
 its atlas rect + original position are printed as a JS array for scene.js.
-Usage: python split-pieces.py in.png out_atlas.png [min_px]"""
+Usage: python split-pieces.py in.png out_atlas.png [min_px] [max_px]
+max_px drops pieces bigger than that (pixel count), e.g. oversized chunks."""
 import sys
 from collections import deque
 from png_index import read_png
@@ -17,6 +18,7 @@ def write_rgba(path, w, h, px):
 
 w, h, p = read_png(sys.argv[1])
 min_px = int(sys.argv[3]) if len(sys.argv) > 3 else 1
+max_px = int(sys.argv[4]) if len(sys.argv) > 4 else 10 ** 9
 seen, comps = set(), []
 for y in range(h):
     for x in range(w):
@@ -31,7 +33,7 @@ for y in range(h):
                         if 0 <= na < w and 0 <= nb < h and (na, nb) not in seen and p[nb][na][3]:
                             seen.add((na, nb))
                             q.append((na, nb))
-            if len(comp) >= min_px:
+            if min_px <= len(comp) <= max_px:
                 comps.append(comp)
 
 # Pack left to right in one strip, 1px gap.

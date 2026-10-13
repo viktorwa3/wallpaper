@@ -371,6 +371,46 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
     - Windows python doesn't see bash's `/tmp`; write temp files to the scratchpad.
     - A JS template literal inside an unquoted bash heredoc gets `${…}` substituted. That emptied `src` and blacked out the page. Quote the heredoc (`<<'EOF'`) or edit with the Edit tool.
   - Lesson: for natural-looking clutter, generate the composition (the model gets size distribution and shapes right), then cut it into pieces and animate those. Procedural placement looks like a pattern.
+- **Round 2 (2026-10-13, 0 gens).** User: "better, but remove the very big pieces; give the blood drops this animation too, partly, moderately".
+  - `split-pieces.py` takes an optional `max_px`; pieces bigger than that are dropped. The debris is re-split with max 45. That removes each spray's clump of touching chunks at the hole (298–417 px) and c1's 65px slab, leaving 13–16 small pieces per crater.
+  - Engine `shards` gets `share` (fraction of pieces that drift, hashed per piece) and `still` (pieces closer than that to `from` stay put).
+  - **Blood bursts are now `shards` too.** The flat images moved to `drafts/blood_{side,stump,arm}_flat.png`; `assets/blood_*.png` are their atlases (89 / 75 / 18 pieces).
+    - Helper `bloodBurst(id, wound, centre, core, seed)`: drift 2, reach 40, period 6, share 0.6, still = the core radius (22 / 10 / 8). The core stays and ~60% of the loose drops sway slightly.
+  - Render `refs/test_round20.png`.
+  - Gotcha: once `assets/blood_*.png` became atlas strips, the old `image` layers drew them as long red bars across the frame. Always switch the layer type in the same step as the asset.
+- **Blood variants, static (2026-10-13, ~32 gens).** User: "let's make the blood properly; give several variants of your choice, no animation for now". Switch with `?blood=a|b|c|d`; sheet `refs/blood_variants.png`. The default stays a.
+  - **a:** the current Pro 96 radial bursts (16621) as `shards`.
+  - **b: blood inpainted into the demon sprite.** Two Pro Flash inpaints, 6 gens each, on the 128² crop at sprite (28,18) of the current demon (with the punched side):
+    - 16801: side spray, mask crop (6..62, 58..100), "dark red liquid spraying violently out of the deep wound … short thick gush breaking into a fan of droplets and long thin streaks … drops running down the skin";
+    - 16802: stump arc, mask (0..40, 4..42).
+    - Both pasted → `assets/demon_blood_b.png`. The blood takes the body's lighting and runs down the thigh. The most coherent.
+  - **c: Pro 64 arterial spurts**, seed 16811, 10 gens, 16 candidates, sheet `refs/blood_spurt_round1.png`. All are parabolic jets from the right edge, and many have a second jet. **c14 on the side, c3 on the stump**, stream foot at sprite (63,43)/(63,46), drawn behind the demon (z 2.5).
+  - **d: procedural**, new `scripts/blood-arcs.py out W H sx sy seed angle:length:bend:width …`. The stream breaks into shaded teardrop drops along arcs; palette #2a0308 / #8e1217 / #d6343a / #ff9696. At this size it reads as blocky red blobs: the weakest.
+  - b, c and d use the procedural `blood_proc_arm.png` as the arm fountain.
+  - **Fan sprays:** Pro 64, seed 16812, 10 gens, 16 candidates, sheet `refs/blood_fan_round1.png`. Picks:
+    - c4: a thin single jet. Mirrored and cut to 22 px, it becomes `blood_jet_arm.png`, the arm fountain. Uncut, it reached the demon's head.
+    - c11: fine mist → `blood_mist.png`.
+    - c12: a slanted fan → `blood_fan_stump.png`.
+    - Source at the right edge, (63,29) / (63,12).
+- **Blood combinations (2026-10-13, 0 gens).** User: "give combinations you think fit". Sheet `refs/blood_combos.png`.
+  - `assets/demon_blood_side.png` = demon.png + the side inpaint 16801 only.
+  - **e:** side inpaint + the c3 arterial arc from the stump + the arm jet. The arc lands on the arm's torn end, so it reads as one blood bridge between body and arm.
+  - **f:** full b (side + stump arc inpainted) + mist on the side + the arm jet.
+  - **g:** side inpaint + slanted fan c12 from the stump (a radial streak burst, very anime) + mist + the arm jet.
+- **g, aimed (2026-10-13, 0 gens).** User: "g's side is good, but the jets miss completely". The sources were on the wounds, but the directions were wrong: the arm jet was horizontal while the torn end faces up-right along the arm, and the stump fan went down-left behind the body.
+  - New **`scripts/aim-sprite.py in out sx sy angle [mirror]`** rotates a spray about its source point so its main axis (source → centroid) points at `angle`, nearest-neighbour. The output is square with the source at (R,R); place it with offset [R,R].
+  - Arm jet: c4 mirrored, cut to its first 24 px, aimed −35° → R 27.
+  - Stump fan: c12 aimed 200°, cut to a 42px radius (it covered the hand) → R 75, now drawn in front (z 6).
+  - Render `refs/test_blood_g2.png`.
+  - Lesson: measure the wound's facing on a zoom (the arm axis, the body normal at the stump), not just its position.
+- **g final, now the default (2026-10-13, 0 gens).** User: "keep this part in g (the curved stump arc from b); give the arm less blood, like the side".
+  - g = `demon_blood_b.png` (side spray + curved stump arc, both inpainted) + mist c11 on the side + **`blood_mist_arm.png`**: c11 mirrored, aimed −35° with aim-sprite.py (R 59), cut to a 16px radius.
+  - The slanted fan and the long arm jet are dropped from g; their files stay for e/f.
+  - `?blood=` defaults to **g**. Render `refs/test_blood_g3.png`.
+- **g, one style (2026-10-13, 0 gens).** User: "then make the stump in a similar style too".
+  - The demon is now `demon_blood_side.png` (side inpaint only; the curved stump arc is gone).
+  - New `blood_mist_stump.png`: c11 aimed 205° (out of the shoulder, away from the body), 24px radius.
+  - All three wounds now share the c11 mist style. Render `refs/test_blood_g4.png`.
 
 ## Wallpaper: "descent" (started 2026-10-08, **released 2026-10-09**) — `wallpapers/descent/`
 
