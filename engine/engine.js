@@ -87,15 +87,21 @@
 //               bursting from x,y: `rings` rings per `period` s, each easing out to r and fading; each refracts the
 //               scene in its band (magnified by up to 1+2·lens), carries a soft light front + a broken 1px crest, and
 //               a short centre flash marks its burst. Reads the canvas: give it a z above what it should distort.
+//   shards      { src, x, y, pieces: [[sx, sy, w, h, ox, oy], ...], from: [x, y], drift, reach, period, seed, grade }
+//               a generated debris burst cut into its pieces (scripts/split-pieces.py prints `pieces` and writes the atlas
+//               `src`): piece i = atlas rect (sx, sy, w, h) drawn at sprite offset (ox, oy) from x,y, drifting away from
+//               `from` (sprite px) and back over ~`period` s by up to drift·dist/reach px — far pieces move more.
 //   gush        { x, y, dir, spread, speed: [min, max], rate, life: [min, max], gravity, hz, jet, jetWidth, colors, seed }
 //               blood gushing from a wound: `rate` drops/s leave x,y along `dir` ±spread/2 degrees, arc under `gravity`
 //               with short motion streaks and darken over their `life`; a thick jet at the source swells on each beat
 //               (`hz`, the spurts also throw the drops faster). Stateless: every drop is computed from time.
-//   float       { kind: 'drop' | 'glass' | 'rock', area: [x, y, w, h], count | points: [[x, y], ...], size: [min, max],
-//               dir, spread, drift, period, colors, glint, seed }  frozen-moment debris hanging in mid-air: pieces placed
+//   float       { kind: 'drop' | 'glass' | 'rock' | 'brick', area: [x, y, w, h], count | points: [[x, y], ...],
+//               from: [x, y], ring: [rMin, rMax], squash, size: [min, max], dir, spread, drift, period, colors, glint, outline, seed }
+//               from = drift away from that point (debris blown out of an impact); with ring, pieces are scattered in an
+//               annulus round it (squash flattens it vertically). brick = 2:1 block tumbling through 4 orientations;  frozen-moment debris hanging in mid-air: pieces placed
 //               once (seeded), each easing out by ~`drift` px along `dir` ±spread/2 degrees and back over ~`period` s.
 //               drop = bright head + dark tail trailing behind its drift; glass = sliver turning through 4 orientations,
-//               occasional `glint` pixel; rock = chunk with a lit corner and a dark underside.
+//               occasional `glint` pixel; rock = irregular chunk with a lit top edge and a dark underside.
 //   vignette    { color, alpha, inner }                     darkens the frame edges (radial, transparent inside `inner` 0..1).
 //   particles   { count, color, speed, angle, length }      procedural rain
 // Common: id, z, alpha (0..1), blend (canvas globalCompositeOperation, e.g. "lighter"),
@@ -762,6 +768,18 @@
         for (let s = -w; s <= w; s++) px(x0 + ux * d - uy * (s + wob), y0 + uy * d + ux * (s + wob), Math.abs(s) === w && w ? dark : d < 2 ? hot : mid);
       }
     },
+    // A generated debris burst cut into its pieces (scripts/split-pieces.py → atlas + piece list), each drifting away
+    // from the impact point and back: amplitude grows with distance, as if the frozen explosion slowly expands.
+    shards(l, t) {
+      if (!l._img) return drawRect(l, '#f0f', l.id);
+      const [fx, fy] = l.from ?? [0, 0], x0 = Math.round(l.x), y0 = Math.round(l.y), per = l.period ?? 6;
+      l.pieces.forEach(([sx, sy, w, h, ox, oy], i) => {
+        const cx = ox + w / 2 - fx, cy = oy + h / 2 - fy, d = Math.hypot(cx, cy) || 1;
+        const amp = (l.drift ?? 4) * d / (l.reach ?? 50), ph = hash(i * 1.37, l.seed ?? 1);
+        const e = 0.5 - 0.5 * Math.cos(((t / (per * (0.8 + 0.4 * ph)) + ph) % 1) * Math.PI * 2);
+        ctx.drawImage(l._faded ?? l._img, sx, sy, w, h, x0 + ox + Math.round(cx / d * amp * e), y0 + oy + Math.round(cy / d * amp * e), w, h);
+      });
+    },
     // Frozen-moment debris: pieces hanging in mid-air, each easing back and forth along its own small drift vector
     // (whole pixels). Pieces are placed once (seeded) in `area`, or at explicit `points`.
     float(l, t) {
@@ -769,10 +787,14 @@
         let seed = (l.seed ?? 1) * 7919 + 13;
         const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed & 0xffff) / 65536; };
         const [ax, ay, aw, ah] = l.area ?? [0, 0, W, H], [s0, s1] = l.size ?? [1, 3];
-        const pts = l.points ?? Array.from({ length: l.count ?? 12 }, () => [ax + rnd() * aw, ay + rnd() * ah]);
+        // ring: [rMin, rMax] around `from` — pieces scattered in an annulus round an impact instead of a box.
+        const ringPt = () => { const a = rnd() * Math.PI * 2, r = l.ring[0] + rnd() * (l.ring[1] - l.ring[0]);
+          return [l.from[0] + Math.cos(a) * r, l.from[1] + Math.sin(a) * r * (l.squash ?? 1)]; };
+        const pts = l.points ?? Array.from({ length: l.count ?? 12 }, () => l.ring && l.from ? ringPt() : [ax + rnd() * aw, ay + rnd() * ah]);
         const dir = (l.dir ?? 0) * Math.PI / 180, spread = (l.spread ?? 60) * Math.PI / 180;
         l._p = pts.map(([x, y]) => {
-          const a = dir + (rnd() - 0.5) * spread;
+          // from: [x, y] — each piece drifts away from that point (debris blown out of an impact), ±spread/4 jitter.
+          const a = l.from ? Math.atan2(y - l.from[1], x - l.from[0]) + (rnd() - 0.5) * spread * 0.5 : dir + (rnd() - 0.5) * spread;
           return { x, y, a, s: Math.round(s0 + rnd() * (s1 - s0)), d: (l.drift ?? 3) * (0.5 + rnd()),
             per: (l.period ?? 5) * (0.7 + 0.6 * rnd()), ph: rnd(), rot: Math.floor(rnd() * 4), c: Math.floor(rnd() * 1e6) };
         });
@@ -795,9 +817,29 @@
           for (let i = 0; i < p.s + 1; i++) px(x + d[0] * i, y + d[1] * i, colors[i % colors.length]);
           if (l.glint && hash(Math.floor(t * 3), p.c) > 0.9) px(x, y, l.glint);
         } else {
-          // A chunk of concrete: lit top-left, dark underside.
-          ctx.fillStyle = colors[1]; ctx.fillRect(x, y, p.s, Math.max(1, p.s - 1));
-          if (p.s > 1) { px(x, y, colors[2]); ctx.fillStyle = colors[0]; ctx.fillRect(x, y + p.s - 1, p.s, 1); }
+          // brick: a 2:1 block tumbling slowly through flat / tilted / upright / tilted. rock: an irregular concrete chunk
+          // (one corner bitten off). Both: lit top edge, dark underside, and a 1px `outline` so they separate from the wall.
+          const pts = [];
+          if (kind === 'brick') {
+            const o = (p.rot + Math.floor(t / p.per * 1.5)) % 4, L = p.s + 2, T = Math.max(2, Math.ceil(p.s / 2) + 1);
+            for (let i = 0; i < L; i++) for (let j = 0; j < T; j++) {
+              const [bx, by] = o === 0 ? [i, j] : o === 2 ? [j, i] : o === 1 ? [i, j + (i >> 1)] : [i, j - (i >> 1)];
+              pts.push([x + bx, y + by, j === 0 ? 2 : j === T - 1 ? 0 : 1]);
+            }
+          } else {
+            const hgt = Math.max(1, p.s - 1);
+            for (let i = 0; i < p.s; i++) for (let j = 0; j < hgt; j++) {
+              if (p.s > 2 && ((p.c % 4 === 0 && i === p.s - 1 && j === 0) || (p.c % 4 === 1 && i === 0 && j === hgt - 1))) continue;
+              pts.push([x + i, y + j, j === 0 ? 2 : j === hgt - 1 ? 0 : 1]);
+            }
+          }
+          if (l.outline) {
+            const own = new Set(pts.map(([a, b]) => a * 4096 + b));
+            ctx.fillStyle = l.outline;
+            for (const [a, b] of pts) for (const [da, db] of [[1, 0], [-1, 0], [0, 1], [0, -1]])
+              if (!own.has((a + da) * 4096 + b + db)) ctx.fillRect(a + da, b + db, 1, 1);
+          }
+          for (const [a, b, c] of pts) px(a, b, colors[c]);
         }
       }
       ctx.globalAlpha = base;

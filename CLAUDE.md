@@ -336,6 +336,41 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
     - Core radius: side c0 22 (its dense core is wide; at 12 a gap opened between the core and the spikes), stump c2 10, arm 8 (+ the 22px radius cut).
     - A 3x3-opaque test was too strict: it hollowed the spikes out to their black outlines.
   - Render `refs/test_round17.png`.
+- **Levitating wall rubble (2026-10-12, 0 gens).** User: "add flying, levitating stones and bricks where the blasts hit the wall".
+  - **Engine `float` extended:**
+    - `from: [x, y]`: each piece drifts away from that point and back (±spread/4 jitter), like debris blown out of an impact.
+    - `ring: [rMin, rMax]` with `from` scatters the pieces in an annulus round it; `squash` flattens the annulus.
+    - New kind `brick`: a 2:1 block tumbling through flat / tilted / upright / tilted orientations.
+    - `rock` is now irregular, with one corner bitten off.
+    - New `outline`: a 1px dark border for rock/brick.
+  - Scene helper `rubble(id, from, r, colors, seed)`, drawn behind the demon (z 2). Each crater gets:
+    - 16 concrete chunks, size 3–6, ring r+3..r+26, drift 5 px, period 6 s;
+    - 7 bricks (#3e2420 / #7a4636 / #a8644c), ring r+5..r+30, drift 6, period 7;
+    - both with outline #141218.
+  - Concrete colours are sampled from the wall: COLD #2e3a44 / #5b757f / #87867f for crater 1, WARM #4a3c34 / #7e6858 / #a78a74 in the lamp light for craters 2 and 3. They replace the old small `rubbleB1` / `rubbleB3`.
+  - Without the outline, the 2–5px chunks vanished into the wall texture.
+  - Render `refs/test_round18.png`.
+- **Generated debris instead of procedural rubble (2026-10-12, 20 gens).** User: "very unrealistic even for pixel art; think how to do it better".
+  - **Diagnosis:**
+    - the pieces formed an even ring round the hole, a halo rather than a blast;
+    - all pieces were uniform procedural capsules of similar size with the same outline;
+    - bricks in a concrete wall;
+    - no dust.
+  - A real blast is a cone thrown out of the wall, back toward the shooter: a few big jagged chunks at the hole, then ever smaller gravel.
+  - **Fix: generate the burst and animate its pieces.**
+    1. `create_image_pro` with style image = a 96² crop of the wall round crater 1 (palette, outline, shading).
+       - Try 1: 96x96, seed 16701, 10 gens, sheet `refs/debris_round1.png`. Realistic slabs, but too big (larger than the craters), and c0's dust puff was opaque and cut flat by the border.
+       - **Try 2: 64x64, seed 16702, 10 gens, 16 candidates** (Pro gives 16 at ≤85 px), sheet `refs/debris_round2.png`. Prompt: "a small frozen spray of broken grey concrete debris blown out of a bullet impact, only the debris, no wall, no dust cloud: impact point at the middle of the right edge; small jagged angular chunks (the biggest only about one sixth of the image wide) near it, then smaller pieces and fine gravel spreading in a cone to the left and slightly downward, lots of empty space". Every candidate is a clean cone. c2/c6/c9/c13 have a dark flat band at the right edge.
+       - Chosen: **c1 → crater 1, c8 → crater 2, c14 → crater 3.**
+    2. **`scripts/split-pieces.py in.png atlas.png [min_px]`** splits the sprite into 8-connected components. Each piece is repacked alone into an atlas strip, so overlapping bounding boxes never copy a neighbour's pixels. It prints `[[sx, sy, w, h, ox, oy], …]` for scene.js.
+    3. **New engine layer `shards`:** draws each atlas piece at its original offset, drifting away from `from` (sprite px) and back. The amplitude is drift·dist/reach, so far pieces move more, like a frozen explosion slowly expanding. Per-piece phase and period; supports `grade` (draws `l._faded`).
+  - Scene: helper `debris(id, crater, seed, grade)`, impact point (60,32) on the crater, drift 4, reach 40, period 7, z 2 (behind the demon). Craters 2 and 3, in the lamp light, get `LAMP` = multiply #d8a878 0.55.
+  - The procedural `rubble` (float rock/brick rings) is removed from the scene. The engine keeps `from`/`ring`/`brick`/`outline`.
+  - Render `refs/test_round19.png`.
+  - Gotchas:
+    - Windows python doesn't see bash's `/tmp`; write temp files to the scratchpad.
+    - A JS template literal inside an unquoted bash heredoc gets `${…}` substituted. That emptied `src` and blacked out the page. Quote the heredoc (`<<'EOF'`) or edit with the Edit tool.
+  - Lesson: for natural-looking clutter, generate the composition (the model gets size distribution and shapes right), then cut it into pieces and animate those. Procedural placement looks like a pattern.
 
 ## Wallpaper: "descent" (started 2026-10-08, **released 2026-10-09**) — `wallpapers/descent/`
 

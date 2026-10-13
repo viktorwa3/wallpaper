@@ -17,6 +17,14 @@
   // Static (user: no sway).
   const DM = { x: 255, y: 102 };
   const at = (sx, sy) => [DM.x + sx, DM.y + sy];
+  // Wall debris: Pro 64 seed 16702 sprays (16 candidates, style = the wall around crater 1; sheet refs/debris_round2.png),
+  // impact point at the middle of the right edge (60,32). Cut into pieces by scripts/split-pieces.py (atlas +
+  // [sx, sy, w, h, ox, oy] per piece); each piece drifts away from the impact and back, far ones more (engine `shards`).
+  // The first try (Pro 96, 16701) was too big — slabs larger than the craters — with an opaque dust puff cut by the border.
+  const DEBRIS = { B1: [[0, 0, 10, 9, 39, 6], [11, 0, 8, 7, 28, 11], [20, 0, 4, 4, 24, 17], [25, 0, 19, 22, 44, 17], [45, 0, 4, 3, 40, 18], [50, 0, 7, 4, 34, 22], [58, 0, 5, 4, 26, 26], [64, 0, 5, 4, 35, 29], [70, 0, 2, 2, 21, 31], [73, 0, 8, 8, 38, 35], [82, 0, 3, 3, 28, 38], [86, 0, 3, 4, 18, 39], [90, 0, 3, 3, 33, 41], [94, 0, 4, 5, 47, 42], [99, 0, 5, 6, 37, 50]], B2: [[0, 0, 6, 6, 40, 10], [7, 0, 4, 5, 33, 11], [12, 0, 21, 27, 43, 14], [34, 0, 3, 3, 44, 18], [38, 0, 4, 3, 39, 19], [43, 0, 4, 3, 27, 24], [48, 0, 8, 8, 33, 25], [57, 0, 3, 3, 22, 29], [61, 0, 4, 5, 39, 34], [66, 0, 5, 4, 31, 35], [72, 0, 5, 7, 42, 39], [78, 0, 2, 1, 50, 39], [81, 0, 6, 5, 49, 41], [88, 0, 4, 3, 36, 44], [93, 0, 4, 2, 19, 45], [98, 0, 3, 2, 30, 51], [102, 0, 3, 3, 38, 54]], B3: [[0, 0, 4, 5, 38, 7], [5, 0, 4, 3, 29, 9], [10, 0, 22, 31, 42, 13], [33, 0, 4, 5, 38, 15], [38, 0, 3, 3, 29, 19], [42, 0, 7, 4, 33, 22], [50, 0, 3, 4, 41, 26], [54, 0, 3, 3, 32, 30], [58, 0, 4, 3, 23, 31], [63, 0, 3, 2, 39, 34], [67, 0, 5, 4, 33, 37], [73, 0, 3, 3, 19, 41], [77, 0, 6, 7, 45, 45], [84, 0, 5, 4, 36, 46], [90, 0, 3, 3, 28, 49], [94, 0, 3, 3, 35, 56]] };
+  const LAMP = [{ blend: 'multiply', color: '#d8a878', alpha: 0.55 }];   // warm the grey chunks in the lamp light
+  const debris = (id, [cx, cy], seed, grade) => ({ id: 'debris' + id, type: 'shards', src: `assets/debris_${id.toLowerCase()}.png`,
+    pieces: DEBRIS[id], from: [60, 32], x: cx - 60, y: cy - 32, drift: 4, reach: 40, period: 7, seed, grade, z: 2 });
   const ARM = { x: DM.x + 60 - 86, y: DM.y + 49 - 44 };   // severed arm sprite, up-left of the stump
 
   window.SCENE = {
@@ -47,11 +55,10 @@
       // shifted the dark window edge behind the demon into a black arc next to the stump.
       hit('hitD1', ...at(60, 49), 28, 0.3, 7, 0),
       hit('hitD2', ...at(80, 80), 18, 0.9, 7, 0),
-      // Concrete knocked out of the building craters, hanging in front of the wall.
-      { id: 'rubbleB1', type: 'float', kind: 'rock', area: [330, 64, 44, 44], count: 9, size: [1, 3], dir: 110, spread: 120,
-        drift: 3, period: 5, seed: 5, z: 2 },
-      { id: 'rubbleB3', type: 'float', kind: 'rock', area: [408, 96, 30, 30], count: 6, size: [1, 2], dir: 90, spread: 140,
-        drift: 2, period: 5, seed: 6, z: 2 },
+      // Debris blown out of the wall craters back toward the shooter, hanging in the air (behind the demon).
+      debris('B1', [350, 88], 1),
+      debris('B2', [356, 143], 2, LAMP),
+      debris('B3', [422, 111], 3, LAMP),
       // Glass and street debris lifted into the air across the street.
       { id: 'glass', type: 'float', kind: 'glass', area: [190, 120, 300, 130], count: 16, size: [1, 3], dir: -90, spread: 360,
         drift: 2, period: 6, glint: '#e8f6ff', seed: 7, z: 8 },
