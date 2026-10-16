@@ -103,6 +103,12 @@
 //               once (seeded), each easing out by ~`drift` px along `dir` ±spread/2 degrees and back over ~`period` s.
 //               drop = bright head + dark tail trailing behind its drift; glass = sliver turning through 4 orientations,
 //               occasional `glint` pixel; rock = irregular chunk with a lit top edge and a dark underside.
+//   embers      { count, wind, gust, lift, trail, band, top, colors }  wind-borne burning motes: blown across the frame at
+//               `wind` px/s (negative = right to left), surging/lulling together on a shared gust noise (gust 0..1),
+//               each bobbing, flickering and cooling along `colors` over 2.5–7 s, with a dim streak behind it.
+//   sheen       { period, width, slope, strength, colors, phase }  faint iridescent sweep: a wide diagonal band of
+//               warm → rose → cool light crossing the frame every `period` s, additive at `strength`.
+//   URL ?fx adds both (embers z 35, sheen z 36) to any scene; ?fx=embers / ?fx=sheen for one.
 //   vignette    { color, alpha, inner }                     darkens the frame edges (radial, transparent inside `inner` 0..1).
 //   particles   { count, color, speed, angle, length }      procedural rain
 // Common: id, z, alpha (0..1), blend (canvas globalCompositeOperation, e.g. "lighter"),
@@ -118,6 +124,14 @@
   const scene = window.SCENE;
   const W = scene.canvas.width, H = scene.canvas.height;
   const debug = new URLSearchParams(location.search).has('grid');
+  // ?fx — try the shared ambience on any wallpaper without touching its scene: wind-borne embers + a slow sheen.
+  // ?fx=embers / ?fx=sheen for one of them. A scene can also list these layer types itself (then skip the flag).
+  const fx = new URLSearchParams(location.search).get('fx');
+  if (fx !== null) {
+    const want = (k) => fx === '' || fx.split(',').includes(k);
+    if (want('embers')) scene.layers.push({ id: 'fxEmbers', type: 'embers', z: 35 });
+    if (want('sheen')) scene.layers.push({ id: 'fxSheen', type: 'sheen', z: 36 });
+  }
 
   const canvas = document.createElement('canvas');
   canvas.width = W;
@@ -510,7 +524,67 @@
     return [px, py];
   }
 
+  // embers: wind-borne burning motes crossing the frame. Wind = base speed + slow gust noise shared by all motes,
+  // so they surge and lull together; each mote bobs on its own, flickers and cools along `colors`, some burn out.
+  function spawnEmber(l, anywhere) {
+    const dir = Math.sign(l.wind ?? 1) || 1, r = Math.random;
+    return { x: anywhere ? r() * W : (dir > 0 ? -6 - r() * 40 : W + 6 + r() * 40), y: r() * H * (l.band ?? 1) + (l.top ?? 0),
+      v: 0.6 + r() * 0.8, vy: (r() - 0.5) * 6, ph: r() * 6.28, fl: 4 + r() * 8, age: anywhere ? r() * 3 : 0,
+      life: 2.5 + r() * 4.5, s: r() < 0.4 ? 2 : 1 };
+  }
+  function stepEmbers(l, t, dt) {
+    const base = l.wind ?? 60, gust = 1 + (l.gust ?? 0.6) * (valueNoise(t * 0.35, 9.1) * 2 - 1);
+    l._wv = base * gust;
+    for (let i = 0; i < l._p.length; i++) {
+      const p = l._p[i];
+      p.age += dt;
+      p.x += l._wv * p.v * dt;
+      p.y += (p.vy + Math.sin(t * 1.3 + p.ph) * 10 - (l.lift ?? 6)) * dt;
+      if (p.age > p.life || p.x < -60 || p.x > W + 60 || p.y < -10 || p.y > H + 10) l._p[i] = spawnEmber(l, false);
+    }
+  }
+
   const draw = {
+    embers(l, t, dt) {
+      if (!l._p) l._p = Array.from({ length: l.count ?? 50 }, () => spawnEmber(l, true));
+      stepEmbers(l, t, dt);
+      const colors = l.colors ?? ['#fff2c0', '#ffc35a', '#ff8a2a', '#e0461e', '#8a1c10'];
+      const base = ctx.globalAlpha, trail = l.trail ?? 5;
+      ctx.globalCompositeOperation = 'lighter';
+      for (const p of l._p) {
+        const k = p.age / p.life, fade = Math.min(1, p.age / 0.4, (1 - k) / 0.35);
+        const fl = 0.55 + 0.45 * Math.sin(t * p.fl + p.ph * 3);
+        ctx.globalAlpha = base * Math.max(0, fade) * fl;
+        ctx.fillStyle = colors[Math.min(colors.length - 1, Math.floor(k * colors.length))];
+        const x = Math.round(p.x), y = Math.round(p.y), sx = -Math.sign(l._wv || 1);
+        ctx.fillRect(x, y, p.s, p.s);
+        if (p.s > 1) {   // dim glow cross round the bigger motes, so they read as burning, not as dust
+          const a = ctx.globalAlpha; ctx.globalAlpha = a * 0.3;
+          ctx.fillRect(x - 1, y, 1, 2); ctx.fillRect(x + 2, y, 1, 2); ctx.fillRect(x, y - 1, 2, 1); ctx.fillRect(x, y + 2, 2, 1);
+          ctx.globalAlpha = a;
+        }
+        // Streak behind it along the wind, dimmer, longer when the gust is strong.
+        const n = Math.min(trail + 3, Math.round(trail * Math.abs(l._wv) / (l.wind ?? 60) * p.v));
+        ctx.globalAlpha *= 0.45;
+        for (let i = 1; i <= n; i++) ctx.fillRect(x + sx * i, y + Math.round(i * -p.vy * 0.02), 1, 1);
+      }
+      ctx.globalAlpha = base;
+    },
+    // sheen: a slow, very faint iridescent sweep — a wide diagonal band whose colour drifts warm → rose → cool —
+    // crossing the frame every `period` s, drawn additively so it only lifts what is there.
+    sheen(l, t) {
+      const period = l.period ?? 9, k = ((t + (l.phase ?? 0)) % period) / period;
+      const band = (l.width ?? 0.35) * W, x = -band + k * (W + band * 2), slope = l.slope ?? 0.6;
+      const g = ctx.createLinearGradient(x - band, -slope * band, x + band, slope * band);
+      const cols = l.colors ?? ['#ff9a4a', '#ff6a8a', '#7ab8ff'];
+      g.addColorStop(0, 'transparent');
+      g.addColorStop(0.3, cols[0]); g.addColorStop(0.5, cols[1]); g.addColorStop(0.7, cols[2]);
+      g.addColorStop(1, 'transparent');
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha *= (l.strength ?? 0.09) * (0.6 + 0.4 * Math.sin(k * Math.PI));
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    },
     // Gauss shot: an electric slug frozen in its moment — a jittering white-cyan beam from `from` (optional) to `to`,
     // and at `to` a bright core inside a cyan haze with crackling lightning arcs re-rolled `hz` times a second.
     gauss(l, t) {

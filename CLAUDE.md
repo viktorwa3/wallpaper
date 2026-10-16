@@ -411,6 +411,19 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
   - The demon is now `demon_blood_side.png` (side inpaint only; the curved stump arc is gone).
   - New `blood_mist_stump.png`: c11 aimed 205° (out of the shoulder, away from the body), 24px radius.
   - All three wounds now share the c11 mist style. Render `refs/test_blood_g4.png`.
+- **c3 default + shared ambience test (2026-10-16, 0 gens).** User: "I like the current state; try the c3 grin; also try an extra animation for all wallpapers: wind with burning particles flying by and a small sheen".
+  - **Grin aim_c3 is the default.** `?aim=c2` gives the old one. Same position (8,124). Renders `refs/check_now.png` (c2) and `refs/check_c3.png`.
+  - **New engine layers, for every wallpaper:**
+    - `embers`: wind-borne burning motes.
+      - Blown across the frame at `wind` px/s (default 60, negative = right to left), surging and lulling together on a shared gust noise.
+      - Each mote bobs, flickers and cools white-yellow → orange → red over 2.5–7 s, then burns out.
+      - 40% are 2px with a dim glow cross; all have a dim streak behind them along the wind, longer in gusts.
+      - 50 motes by default.
+    - `sheen`: a faint iridescent sweep. A wide diagonal band of warm → rose → cool light crosses the frame every 9 s, additive at strength 0.09.
+  - **URL `?fx`** adds both to any scene without editing it (embers z 35, sheen z 36, under the vignette); `?fx=embers` / `?fx=sheen` add one.
+  - Renders: `refs/fx_<name>.png` at the repo root, sheet `refs/fx_all.png`.
+  - Headless stills show the embers as orange specks; the gusts, streaks and sheen need a live look.
+  - Not shipped in any bundle yet: once the user picks per-wallpaper settings, add the layers to each scene.js.
 
 ## Wallpaper: "descent" (started 2026-10-08, **released 2026-10-09**) — `wallpapers/descent/`
 

@@ -5,9 +5,9 @@
   const q = new URLSearchParams(location.search);
   const BG = q.get('bg') ? `assets/drafts/bg_pixen_512x288_seed${q.get('bg')}.png` : 'assets/bg.png';   // bg = 16001b, craters moved (v3)
   // Grin: Pro 168 seed 16302 c2 / c3 with body v9 + the rooftop grin as references (round 9) — shared art,
-  // ../../shared/characters/grin/aim/. ?aim=c3 picks the other one; ?grin=<seed> shows an old pixen draft.
+  // ../../shared/characters/grin/aim/. ?aim=c2 picks the other one; ?grin=<seed> shows an old pixen draft.
   const old = q.get('grin');
-  const aim = q.get('aim') === 'c3' ? 'c3' : 'c2';
+  const aim = q.get('aim') === 'c2' ? 'c2' : 'c3';   // c3 by default (user, 2026-10-16)
   const GRIN = old ? `assets/drafts/grin_back_edit_seed${old}.png` : `../../shared/characters/grin/aim/aim_${aim}.png`;
   const G = old ? { x: -14, y: 60 } : { x: 8, y: 124 };   // sprite position
   // Hits = almost transparent shockwaves bursting from the centre (engine `wave`), no beams.
