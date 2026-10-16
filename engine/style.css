@@ -13,5 +13,6 @@ body {
 
 canvas {
   display: block;
+  flex: none;            /* 'cover' makes the canvas larger than the screen: keep it centred, don't shrink it */
   image-rendering: pixelated;
 }

@@ -3,6 +3,7 @@
 // frozen mid-moment tear into the demon and the building behind it. Debris hangs and drifts (frozen moment); blood splashes are static.
 (() => {
   const q = new URLSearchParams(location.search);
+  const SKY_MASK = 'assets/sky_mask.png';   // the visible sky (top right), for the fire glow
   const BG = q.get('bg') ? `assets/drafts/bg_pixen_512x288_seed${q.get('bg')}.png` : 'assets/bg.png';   // bg = 16001b, craters moved (v3)
   // Grin: Pro 168 seed 16302 c2 / c3 with body v9 + the rooftop grin as references (round 9) — shared art,
   // ../../shared/characters/grin/aim/. ?aim=c2 picks the other one; ?grin=<seed> shows an old pixen draft.
@@ -65,6 +66,15 @@
     maxFps: 30,
     layers: [
       { id: 'bg', type: 'image', src: BG, x: 0, y: 0, z: 0 },
+      // Fire glow in the patch of sky at the top right (assets/sky_mask.png: scripts/sky-mask.py, cut at row 34): city
+      // fires below the roofline light the sky from beneath — a flickering gradient rising from the horizon, a few
+      // jittering hot spots at the roofline and churning smoke lit orange from below.
+      { id: 'skyGlow', type: 'gradient', y0: 0, y1: 68, peak: 0.6, color: '#ff4a14', alpha: 0.75, flicker: 0.35, hz: 0.7,
+        blend: 'lighter', mask: SKY_MASK, z: 0.5 },
+      ...[[470, 33, 22, 0], [496, 34, 26, 1.7], [511, 30, 18, 3.1]].map(([x, y, r, ph], i) => ({ id: 'skyFire' + i, type: 'glow',
+        x, y, r, color: '#ff7a2a', alpha: 0.55, flicker: 0.45, jitter: 0.5, hz: 0.9, phase: ph, blend: 'lighter', mask: SKY_MASK, z: 0.6 })),
+      { id: 'skySmoke', type: 'murk', x: 448, y: 0, w: 64, h: 68, color: '#ff8a3a', scale: 14, drift: [-5, -4], curl: 0.3,
+        cover: 0.5, soft: 0.25, density: 0.55, levels: 4, fps: 10, blend: 'lighter', alpha: 0.35, mask: SKY_MASK, z: 0.7 },
       // Building hits in the bg's craters around the demon (bg_16001b_moved: the far-left craters were painted out).
       hit('hitB1', 350, 88, 18, 0, 1),
       hit('hitB2', 356, 143, 14, 0.6, 1),
@@ -93,6 +103,16 @@
       { id: 'rocks', type: 'float', kind: 'rock', area: [180, 200, 320, 70], count: 14, size: [1, 4], dir: -90, spread: 60,
         drift: 3, period: 6, seed: 8, z: 8 },
       { id: 'grin', type: 'image', src: GRIN, x: G.x, y: G.y, z: 10 },
+      // Heat and wind (user, 2026-10-16: "wind with fire particles flying by, and a shimmer like a desert in the heat").
+      // Heat shimmer over everything below the roofline, strongest at the street; then wind-borne embers blowing right
+      // to left (from behind the demon toward the grin), crossing the whole frame. The sheen sweep was dropped (user).
+      { id: 'heat', type: 'heat', top: 40, bottom: 288, amp: 1.6, speed: 2.2, falloff: 1.3, z: 30 },
+      { id: 'embers', type: 'embers', count: 90, wind: -55, gust: 0.7, lift: 4, trail: 5, cross: true, z: 35 },
+      // Fiery wind: the whole scene warmed a little (overlay), and torn streaks of orange haze blowing right to left with
+      // the embers (a stretched, fast-drifting murk drawn additively).
+      { id: 'warm', type: 'rect', x: 0, y: 0, w: 512, h: 288, color: '#ff6a24', label: '', blend: 'overlay', alpha: 0.09, z: 31 },
+      { id: 'fireWind', type: 'murk', x: 0, y: 0, w: 512, h: 288, color: '#ff6a20', scale: 34, drift: [-38, -2], curl: 0.15,
+        cover: 0.58, soft: 0.22, density: 0.5, levels: 4, fps: 12, blend: 'lighter', alpha: 0.2, z: 32 },
       { id: 'vignette', type: 'vignette', color: '#040508', alpha: 0.5, inner: 0.55, z: 40 },
     ],
   };

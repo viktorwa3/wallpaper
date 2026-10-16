@@ -103,11 +103,15 @@
 //               once (seeded), each easing out by ~`drift` px along `dir` ±spread/2 degrees and back over ~`period` s.
 //               drop = bright head + dark tail trailing behind its drift; glass = sliver turning through 4 orientations,
 //               occasional `glint` pixel; rock = irregular chunk with a lit top edge and a dark underside.
-//   embers      { count, wind, gust, lift, trail, band, top, colors }  wind-borne burning motes: blown across the frame at
+//   embers      { count, wind, gust, lift, trail, band, top, colors, cross }  wind-borne burning motes: blown across the frame at
 //               `wind` px/s (negative = right to left), surging/lulling together on a shared gust noise (gust 0..1),
-//               each bobbing, flickering and cooling along `colors` over 2.5–7 s, with a dim streak behind it.
+//               each bobbing, flickering and cooling along `colors` over 2.5–7 s, with a dim streak behind it. cross: true =
+//               each mote lives until it has crossed the whole frame (life from its speed), none burns out midway.
 //   sheen       { period, width, slope, strength, colors, phase }  faint iridescent sweep: a wide diagonal band of
 //               warm → rose → cool light crossing the frame every `period` s, additive at `strength`.
+//   heat        { top, bottom, amp, speed, falloff }  desert-heat shimmer: rows between top and bottom are redrawn shifted
+//               sideways by whole pixels along waves rising upward (+ slow noise); up to `amp` px at the bottom, 0 at
+//               the top (falloff = curve). Reads the canvas, so put it above everything that should shimmer.
 //   URL ?fx adds both (embers z 35, sheen z 36) to any scene; ?fx=embers / ?fx=sheen for one.
 //   vignette    { color, alpha, inner }                     darkens the frame edges (radial, transparent inside `inner` 0..1).
 //   particles   { count, color, speed, angle, length }      procedural rain
@@ -144,10 +148,19 @@
   off.height = H;
   const offCtx = off.getContext('2d');
 
+  // Screen fit. 'int' = largest integer scale, letterboxed (pixel-perfect). 'fill' = fractional scale filling the
+  // screen on the limiting axis (nearest-neighbour via image-rendering: pixelated, so some art pixels are 1 screen px
+  // wider than others). 'cover' = fill both axes, cropping the overflow. Default 'auto': integer if it leaves borders
+  // of at most 3% (e.g. 1440p = exactly x5), otherwise 'fill' (1080p = x3.75 instead of a x3 box with black bars).
+  // Override with ?fit=int|fill|cover or scene.fit. Sizes are in device pixels, so Windows display scaling is handled.
+  const fitMode = new URLSearchParams(location.search).get('fit') ?? scene.fit ?? 'auto';
   function fit() {
-    const scale = Math.max(1, Math.floor(Math.min(innerWidth / W, innerHeight / H)));
-    canvas.style.width = W * scale + 'px';
-    canvas.style.height = H * scale + 'px';
+    const dpr = devicePixelRatio || 1, sw = innerWidth * dpr, sh = innerHeight * dpr;
+    const exact = Math.min(sw / W, sh / H), whole = Math.max(1, Math.floor(exact));
+    let scale = fitMode === 'cover' ? Math.max(sw / W, sh / H) : fitMode === 'fill' ? exact : whole;
+    if (fitMode === 'auto' && whole / exact < 0.97) scale = exact;
+    canvas.style.width = W * scale / dpr + 'px';
+    canvas.style.height = H * scale / dpr + 'px';
   }
   addEventListener('resize', fit);
   fit();
@@ -529,8 +542,15 @@
   function spawnEmber(l, anywhere) {
     const dir = Math.sign(l.wind ?? 1) || 1, r = Math.random;
     return { x: anywhere ? r() * W : (dir > 0 ? -6 - r() * 40 : W + 6 + r() * 40), y: r() * H * (l.band ?? 1) + (l.top ?? 0),
-      v: 0.6 + r() * 0.8, vy: (r() - 0.5) * 6, ph: r() * 6.28, fl: 4 + r() * 8, age: anywhere ? r() * 3 : 0,
+      dir, v: 0.6 + r() * 0.8, vy: (r() - 0.5) * 6, ph: r() * 6.28, fl: 4 + r() * 8, age: anywhere ? r() * 3 : 0,
       life: 2.5 + r() * 4.5, s: r() < 0.4 ? 2 : 1 };
+  }
+  // cross: live long enough to cross the whole frame (the life is set from the mote's own speed), so none burns out
+  // midway; they still cool along `colors` and fade only past the far edge.
+  function spawnEmberX(l, anywhere) {
+    const p = spawnEmber(l, anywhere);
+    if (l.cross) { p.life = (W + 90) / (Math.abs(l.wind ?? 60) * p.v * 0.75); if (anywhere) p.age = (p.dir > 0 ? p.x : W - p.x) / W * p.life * 0.9; }
+    return p;
   }
   function stepEmbers(l, t, dt) {
     const base = l.wind ?? 60, gust = 1 + (l.gust ?? 0.6) * (valueNoise(t * 0.35, 9.1) * 2 - 1);
@@ -540,13 +560,13 @@
       p.age += dt;
       p.x += l._wv * p.v * dt;
       p.y += (p.vy + Math.sin(t * 1.3 + p.ph) * 10 - (l.lift ?? 6)) * dt;
-      if (p.age > p.life || p.x < -60 || p.x > W + 60 || p.y < -10 || p.y > H + 10) l._p[i] = spawnEmber(l, false);
+      if (p.age > p.life || p.x < -60 || p.x > W + 60 || p.y < -10 || p.y > H + 10) l._p[i] = spawnEmberX(l, false);
     }
   }
 
   const draw = {
     embers(l, t, dt) {
-      if (!l._p) l._p = Array.from({ length: l.count ?? 50 }, () => spawnEmber(l, true));
+      if (!l._p) l._p = Array.from({ length: l.count ?? 50 }, () => spawnEmberX(l, true));
       stepEmbers(l, t, dt);
       const colors = l.colors ?? ['#fff2c0', '#ffc35a', '#ff8a2a', '#e0461e', '#8a1c10'];
       const base = ctx.globalAlpha, trail = l.trail ?? 5;
@@ -569,6 +589,22 @@
         for (let i = 1; i <= n; i++) ctx.fillRect(x + sx * i, y + Math.round(i * -p.vy * 0.02), 1, 1);
       }
       ctx.globalAlpha = base;
+    },
+    // heat: desert-heat shimmer. The frame below `top` is copied and redrawn row by row, each row shifted sideways by a
+    // whole number of pixels along waves that travel upward (hot air rising). Strongest at `bottom`, gone at `top`.
+    heat(l, t) {
+      const top = l.top ?? 0, bot = l.bottom ?? H, h = bot - top, amp = l.amp ?? 1.6, speed = l.speed ?? 2.2;
+      if (!l._buf) { l._buf = document.createElement('canvas'); l._buf.width = W; l._buf.height = h; l._bctx = l._buf.getContext('2d'); }
+      l._bctx.clearRect(0, 0, W, h);
+      l._bctx.drawImage(ctx.canvas, 0, top, W, h, 0, 0, W, h);
+      for (let r = 0; r < h; r++) {
+        const y = top + r, k = Math.pow(r / h, l.falloff ?? 1.2);                // 0 at the top → 1 at the bottom
+        // Two waves of different length rising at different speeds + slow noise, so the shimmer never repeats visibly.
+        const w = Math.sin(y * 0.45 + t * speed * 2.1) * 0.6 + Math.sin(y * 0.17 + t * speed) * 0.4;
+        const n = valueNoise(y * 0.08, t * 0.5) * 2 - 1;
+        const dx = Math.round(amp * k * (w * 0.75 + n * 0.5));
+        if (dx) ctx.drawImage(l._buf, 0, r, W, 1, dx, y, W, 1);
+      }
     },
     // sheen: a slow, very faint iridescent sweep — a wide diagonal band whose colour drifts warm → rose → cool —
     // crossing the frame every `period` s, drawn additively so it only lifts what is there.

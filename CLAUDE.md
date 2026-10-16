@@ -49,8 +49,8 @@ wallpapers/<name>/
 scripts/                        # git-sync.ps1, mcp-headers.ps1, screenshot.ps1, despeckle.ps1, contact-sheet.ps1 (tile candidates at 3x for comparison), sprite-sheet.ps1 (frames → 1-row sheet), fg-cutout.ps1 (bg minus sky → bg_fg.png), hole-mask.ps1 (layer mask from dark openings in bg), strip-grey.ps1 (remove baked-in smoke from a fire sheet), bundle.ps1 (Lively folder + zip), sky-mask.py (sky mask + glowing band layer from a bg), png_index.py / snap.py / finish.py (python+zlib PNG helpers: indexed re-encode for inline MCP uploads, palette snap after downscaling, row cut + speck removal)
 ```
 
-Current wallpapers: `burning-city-grin` (ruined-city was merged into it); `rooftop-clash` (released, see its section); `otherworld` (released 2026-10-08, see its section); `descent` (released 2026-10-09, see its section); `point-blank` in progress (see its section). Scene is `scene.js` (not JSON) so pages work from `file://` without a server — `fetch` of local JSON is blocked there. Asset paths in scene.js are relative to the wallpaper's index.html (shared art = `../../shared/<kind>/<name>/...`). Missing images render as magenta rects, so scenes can reference assets before they exist; `rect` layers are explicit placeholders.
-Engine: integer scale = floor(min(screenW/512, screenH/288)), letterboxed (1080p → x3); frame cap `maxFps` (default 30); `?grid` URL flag draws a 16px grid + layer outlines.
+Current wallpapers: `burning-city-grin` (ruined-city was merged into it); `rooftop-clash` (released, see its section); `otherworld` (released 2026-10-08, see its section); `descent` (released 2026-10-09, see its section); `point-blank` (released 2026-10-16, see its section). Scene is `scene.js` (not JSON) so pages work from `file://` without a server — `fetch` of local JSON is blocked there. Asset paths in scene.js are relative to the wallpaper's index.html (shared art = `../../shared/<kind>/<name>/...`). Missing images render as magenta rects, so scenes can reference assets before they exist; `rect` layers are explicit placeholders.
+Engine: screen fit `auto` (2026-10-16): the integer scale floor(min(screenW/512, screenH/288)) if it leaves borders ≤3% (1440p = x5); otherwise a fractional 'fill' scale with `image-rendering: pixelated` (1080p = x3.75 full screen, instead of a 1536x864 box with black bars). Override with `?fit=int|fill|cover` or `scene.fit`; sizes are in device pixels (Windows scaling). `screenshot.ps1 -Size 1920,1080` checks other screens; frame cap `maxFps` (default 30); `?grid` URL flag draws a 16px grid + layer outlines.
 **Verify visually** with `scripts/screenshot.ps1 <name> [out.png] [-Grid]` (headless Edge, 2560x1440), then Read the PNG. The script waits for Edge (Start-Process -Wait); an all-black PNG means the page didn't render. `-Query "head=264&lift=40"` passes URL params for scene variants, `-Dist` renders the bundle in dist/.
 Lively imports one folder: `scripts/bundle.ps1 <name>` flattens the `../../` paths into `dist/<name>/` + a zip to drop into Lively. It copies all of `shared/` except `drafts/`, `refs/`, `frames/` (structure kept), and the wallpaper's `assets/` minus `drafts/` and `frames/` — **scenes must reference only finals at the top level of `assets/`** (promote a chosen draft by copying it there under a plain name), so scene variants that point into shared drafts (e.g. `?head=224`) work only from the repo.
 
@@ -75,6 +75,16 @@ Account: PixelLab **Tier 1 active** (2000 gens, resets 2026-11-02).
   - Bundle: `scripts/bundle.ps1 otherworld -Title "Otherworld" -Desc …` → `dist/otherworld.zip` (~925 KB). Preview verified rendering.
   - CPU note: three full-res `murk` layers (fog, cloud light, fog over the glow) are recomputed at 12 fps. If Lively shows high CPU, lower their `fps` first.
 - [x] **descent release 2026-10-09** (user: "pack it, this is exactly it"): `scripts/bundle.ps1 descent -Title "Descent" -Desc …` → `dist/descent.zip` (~1.05 MB). The preview was verified rendering on the 2nd try; the first headless shot was black.
+- [x] **point-blank release 2026-10-16** (user: "great, pack it"):
+  - `scripts/bundle.ps1 point-blank -Title "Point Blank" -Desc …` → `dist/point-blank.zip` (~951 KB).
+  - Defaults: grin aim_c3, blood g, bg `assets/bg.png`. Only finals are referenced; drafts load only via `?bg=` / `?grin=`.
+  - The bundle's own thumbnail render came out black (the random headless black). It was replaced by a good `-Dist` shot (2 of 3 retakes lit) and the zip was rebuilt.
+- [x] **1080p fit, all bundles rebuilt (2026-10-16).** User, with a screenshot of rooftop-clash on the second (1920x1080) monitor, small in a black frame: "make a 1920x1080 variant".
+  - Cause: the integer-only scale; 1080/288 = 3.75 → x3.
+  - Fix: the engine fit mode `auto` (see Engine above); `style.css` canvas `flex: none` for `cover`. One build serves both monitors, so no separate 1080 bundle is needed.
+  - Verified: rooftop-clash at 1920x1080 fills the screen (`wallpapers/rooftop-clash/refs/fit_1080.png`); 1440p is unchanged (x5).
+  - All five bundles were rebuilt with the new engine. otherworld and descent had no `dist/` folders left, so their descriptions were re-entered.
+  - The point-blank and otherworld thumbnails rendered black again and were replaced by lit `-Dist` retakes. About half of headless shots are black; check lit pixels before trusting any shot.
 - [x] Lively bundle script (2026-10-03): `scripts/bundle.ps1 burning-city-grin [-Title] [-Desc]` → `dist/<name>/` + `dist/<name>.zip` (gitignored). Copies engine + shared PNGs + the wallpaper's assets (minus `frames/`), rewrites `../../` paths, writes `LivelyInfo.json` (Type 1 = web), renders the bundle itself for `thumbnail.png` (480x270) / `preview.png`, and regenerates `dist/preview.html` (all bundles live in iframes + full-screen / zip links). Check a bundle with `screenshot.ps1 <name> -Dist`. Gotcha: read/write text as explicit UTF-8 — PowerShell 5 `Get-Content` reads ANSI and mangled scene.js → black page.
 - [x] head size (2026-10-02): user wanted the head **bigger**; eyes may be sacrificed to the veil. Upscaled redraws of 7302 (look preserved): `head4_pixen_224x140/264x164/320x200` via `edit_image_pixen` with larger width/height (1 gen each — it re-renders, not rescales; output area <= 256x256) and `head4_pro_256x160` via `create_image_pro` with 7302 as reference (20 gens, 1 candidate, cleaner). scene.js picks via `?head=168|224|264|pro256|320` (default 320); geometry table (bbox, eyes, eye rows) drives head position and eye glow. Comparison: `shared/characters/grin/refs/heads_compare.png`. Head drafts now in `shared/characters/grin/drafts/`. History: base head2 seed7202_c3, eyes edit 7302 = favourite.
 - [x] eye glow: two `glow` layers (r 9, #ff2a1a, alpha 0.75, lighter, pulse 0.5Hz) at z 13, above the head.
@@ -120,7 +130,7 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
   - **Final decision (user, 2026-10-06): only `portrait_256.png` is kept** ("the others are pretty ugly"). `portrait_128`, `portrait_ink_168`, their source drafts and `refs/portrait_finals.png` were deleted. The folder now holds `portrait_256.png` + `drafts/portrait_pixen_256_seed13002.png`. Takeaway: the untouched pixen 256 beat every hand- or inpaint-fixed variant. For this kind of portrait, pick the cleanest raw generation rather than repairing a weaker one.
   - Lessons: check small glowing eyes at zoom — Pro likes heart/odd-shaped pupils; "dead clouded eye" from the inspiration was not wanted (user: the eye isn't blind / isn't torn out) → for this character keep the human-side eye alive. PowerShell variables are case-insensitive (`$P` = `$p`) — never reuse a name differing only in case. When repainting a feature, recolour inside the existing shading instead of filling a new shape: a filled ellipse always shows up as a ring or a patch.
 
-## Wallpaper: "point-blank" (started 2026-10-09, in progress) — `wallpapers/point-blank/`
+## Wallpaper: "point-blank" (started 2026-10-09, **released 2026-10-16**) — `wallpapers/point-blank/`
 
 **Brief (user):**
 - The grin and the demon, seen from the grin's side (over his shoulder).
@@ -424,6 +434,38 @@ Not a wallpaper: a standalone portrait of the grin **before the full transformat
   - Renders: `refs/fx_<name>.png` at the repo root, sheet `refs/fx_all.png`.
   - Headless stills show the embers as orange specks; the gusts, streaks and sheen need a live look.
   - Not shipped in any bundle yet: once the user picks per-wallpaper settings, add the layers to each scene.js.
+- **Wind + heat shimmer in point-blank (2026-10-16, 0 gens).** User: "wind with fiery particles flying by, and a slight shimmer like in a desert in the heat". The `sheen` alone is just a colour sweep, not heat haze.
+  - **New engine layer `heat`:**
+    - The frame between `top` and `bottom` is copied and redrawn row by row. Each row is shifted sideways by whole pixels along two upward-travelling sine waves plus slow noise.
+    - Strongest (`amp` px) at the bottom, fading to 0 at the top via a `falloff` curve.
+    - Pixel-crisp; about 250 1-row drawImage calls per frame.
+    - It reads the canvas, so its z must be above what should shimmer.
+  - Scene layers:
+    - `heat`: top 40, amp 1.6, speed 2.2, falloff 1.3, z 30 (above the characters, debris and blood);
+    - `embers`: 90 motes, wind −55 (right to left, from behind the demon toward the grin), gust 0.7, z 35;
+    - `sheen`: warm colours only, strength 0.06, period 11, z 36.
+  - Render `refs/test_heat.png`. A still shows only the embers; the shimmer is a 1–2px row wobble and must be judged live.
+- **Fiery wind, round 2 (2026-10-16, 0 gens).** User: "remove the sheen; the particles must fly all the way to the left edge; make the background a bit more fiery, as if the wind had a slight fire tint".
+  - `sheen` removed from the scene.
+  - New `embers` option **`cross: true`**: each mote's life is set from its own speed ((W+90)/(|wind|·v·0.75)), so it crosses the whole frame. Prewarmed motes get an age matching their position. Before this, 2.5–7 s lives burned out mid-frame.
+  - **Fire tint:**
+    - `warm`: a full-frame rect, #ff6a24, `overlay` at 0.09.
+    - `fireWind`: an orange `murk` (#ff6a20, scale 34, drift (−38,−2), cover 0.58, density 0.5), `lighter` at 0.2. Torn haze streaks blow right to left with the embers.
+    - At 0.16 / 0.35 the scene went milky and the grin turned brown.
+  - Render `refs/test_heat2.png`. Two headless shots came out black (no console errors); the third was fine.
+- **Fire glow in the sky (2026-10-16, 0 gens).** User: "where a bit of sky is visible, add a glow from the fires".
+  - The only sky is the top-right patch: the gap between the big building and the right block, and above the right block.
+  - `assets/sky_mask.png`: `sky-mask.py bg.png drafts/pb 452,452,512,512 505,5 470,15 495,20`, then cut below row 34. Below that the flood leaked down the dark outlines of the lamp post and the side building.
+  - `sky-mask.py` fix: a bounds check on x (a fill touching the right edge crashed with IndexError).
+  - Layers, all `lighter` and masked to the sky, z 0.5–0.7 (behind everything):
+    - `skyGlow`: a gradient rising from the roofline (y0 0 → peak 0.95 → y1 36), #ff4a14 0.75, flicker 0.35;
+    - 3 `glow` hot spots on the roofline (#ff7a2a, jitter 0.5, desynced);
+    - `skySmoke`: an orange murk (scale 14, drift (−5,−4), density 0.55, alpha 0.35), smoke lit from below.
+  - Render `refs/test_skyglow.png`.
+  - Fix (user: "you missed a chunk"): the black gap under the lamp arc, between the big building's edge (x 463) and the lamp post, is sky too.
+    - It was added by a strict flood from (470,40) on the exact sky colour #080300 (±12).
+    - Trimmed below the blue wall's diagonal (y > 70 − (x−463)·1.44), at x ≥ 479 (the post) and below row 66. The leak ran down 2px outlines of the same black.
+    - The gradient now spans rows 0..68 (peak 0.6), and the smoke box is 64x68.
 
 ## Wallpaper: "descent" (started 2026-10-08, **released 2026-10-09**) — `wallpapers/descent/`
 

@@ -38,7 +38,7 @@ for s in sys.argv[4:]:
     q.append((x, y))
 while q:
     x, y = q.popleft()
-    if not (0 <= y < h and L0 + (L1 - L0) * y / h <= x <= R0 + (R1 - R0) * y / h) or sky[y][x] or not is_sky(px[y][x]):
+    if not (0 <= y < h and 0 <= x < w and L0 + (L1 - L0) * y / h <= x <= R0 + (R1 - R0) * y / h) or sky[y][x] or not is_sky(px[y][x]):
         continue
     sky[y][x] = True
     q.extend(((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
